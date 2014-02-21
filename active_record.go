@@ -4,7 +4,7 @@ import (
 	"github.com/lann/squirrel"
 	"reflect"
 	"strings"
-	//"fmt"
+	"fmt"
 )
 
 const SquirrelrmTag = "sqrl"
@@ -34,7 +34,7 @@ type Recorder interface {
 	Insert() error
 	Update() error
 	Delete() error
-	Has() error
+	Has() (bool, error)
 	Load() error
 	Key() []string
 }
@@ -42,15 +42,18 @@ type Recorder interface {
 // Implements the Recorder interface, and stores data in a DB.
 type DbRecorder struct {
 	builder *squirrel.StatementBuilderType
+	db squirrel.DBProxy
 	table string
 	fields []*Field
 	key []*Field
 	record ActiveRecord
 }
 
-func NewDbRecorder(builder *squirrel.StatementBuilderType) *DbRecorder {
+func NewDbRecorder(db squirrel.DBProxy/*builder *squirrel.StatementBuilderType*/) *DbRecorder {
+	b := squirrel.StatementBuilder.RunWith(db)
 	r := new(DbRecorder)
-	r.builder = builder
+	r.builder = &b
+	r.db = db
 
 	return r
 }
@@ -80,40 +83,35 @@ func (s *DbRecorder) Key() []string {
 }
 
 func (s *DbRecorder) Load() error {
-
 	whereParts := s.whereIds()
 
 	q := s.builder.Select(s.colList(false)...).From(s.table).Where(whereParts)
-	/*
-	//q := s.builder.Select("id_two").From("test_table").Where("id = ?", 1)
-	refs := make([]interface{}, 0, len(s.fields))
-	withKeys := false
-
-	ar := reflect.Indirect(reflect.ValueOf(s.record))
-	for _, f := range s.fields {
-		if !withKeys && f.isKey {
-			continue
-		}
-
-		//ref := reflect.ValueOf(ar.FieldByName(f.name)).Addr().Interface()
-		ref := reflect.Indirect(reflect.ValueOf(ar.FieldByName(f.name)))
-		if ref.IsValid() {
-			val := ref.Interface()
-			refs = append(refs, val)
-		} else { // Should never hit this part.
-			var skip interface{}
-			refs = append(refs, &skip)
-		}
-
-	}
-	*/
-
-	//ss, _, err := q.ToSql()
-	//println(ss)
 	err := q.QueryRow().Scan(s.fieldReferences(false)...)
-	// err := q.QueryRow().Scan(refs...)
-	//err := q.QueryRow().Scan(refs...)
 
+	return err
+}
+
+func (s *DbRecorder) Has() (bool, error) {
+	has := 0
+	whereParts := s.whereIds()
+
+	q := s.builder.Select("COUNT(*)").From(s.table).Where(whereParts)
+	err := q.QueryRow().Scan(has)
+
+	return (has > 0), err
+}
+
+func (s *DbRecorder) Delete() error {
+	// XXX: Change this when Squirrel has a Delete().
+	wheres := s.whereIds()
+	where := make([]string, 0, len(wheres))
+	vals := make([]interface{}, 0, len(wheres))
+	for k, v := range wheres {
+		where = append(where, fmt.Sprintf("%s = ?", k))
+		vals = append(vals, v)
+	}
+	sql := fmt.Sprintf("DELETE FROM %s WHERE %s", s.table, strings.Join(where, " AND "))
+	_, err := s.db.Exec(sql, vals...)
 	return err
 }
 

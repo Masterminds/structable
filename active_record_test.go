@@ -69,9 +69,10 @@ func TestBind(t *testing.T) {
 
 func TestLoad(t *testing.T) {
 	stool := newStool()
-	db, builder := squirrelFixture()
+	db := &DBStub{}
+	//db, builder := squirrelFixture()
 
-	r := NewDbRecorder(&builder).Bind("test_table", stool)
+	r := NewDbRecorder(db).Bind("test_table", stool)
 
 	if err := r.Load(); err != nil {
 		t.Errorf("Error running query: %s", err)
@@ -82,6 +83,44 @@ func TestLoad(t *testing.T) {
 		t.Errorf("Unexpected SQL: %s", db.LastQueryRowSql)
 	}
 
+	if db.LastQueryRowArgs[0].(int) != 1 {
+		t.Errorf("Expected 1")
+	}
+
+}
+
+func TestDelete(t *testing.T) {
+	stool := newStool()
+	db := &DBStub{}
+	r := NewDbRecorder(db).Bind("test_table", stool)
+
+	if err := r.Delete(); err != nil {
+		t.Errorf("Failed to delete: %s", err)
+	}
+
+	expect := "DELETE FROM test_table WHERE id = ? AND id_two = ?"
+	if db.LastExecSql != expect {
+		t.Errorf("Unexpect query: %s", db.LastExecSql)
+	}
+	if db.LastExecArgs[0].(int) != 1 {
+		t.Errorf("Expected 1")
+	}
+}
+
+func TestHas(t *testing.T) {
+	stool := newStool()
+	db := &DBStub{}
+	r := NewDbRecorder(db).Bind("test_table", stool)
+
+	_, err := r.Has()
+	if err != nil {
+		t.Errorf("Error calling Has: %s", err)
+	}
+
+	expect := "SELECT COUNT(*) FROM test_table WHERE id = ? AND id_two = ?"
+	if db.LastQueryRowSql != expect {
+		t.Errorf("Unexpected SQL: %s", db.LastQueryRowSql)
+	}
 }
 
 func squirrelFixture() (*DBStub, squirrel.StatementBuilderType) {
