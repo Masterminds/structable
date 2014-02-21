@@ -1,0 +1,217 @@
+package squirrelrm
+
+import (
+	"github.com/lann/squirrel"
+	"reflect"
+	"strings"
+	//"fmt"
+)
+
+const SquirrelrmTag = "sqrl"
+
+/* ActiveRecord describes a struct that can be stored.
+
+Example:
+	type Stool struct {
+		Id 		 int 	`sqrl:"id PRIMARY_KEY"`
+		Legs 	 int    `sqrl:"number_of_legs"`
+		Material string `sqrl:"material"`
+		Ignored  string // will not be stored.
+	}
+
+
+*/
+type ActiveRecord interface {}
+
+type Field struct {
+	name, column string
+	isKey bool
+}
+
+type Recorder interface {
+	// Bind a tble name to an active record.
+	Bind(string, ActiveRecord)
+	Insert() error
+	Update() error
+	Delete() error
+	Has() error
+	Load() error
+	Key() []string
+}
+
+// Implements the Recorder interface, and stores data in a DB.
+type DbRecorder struct {
+	builder *squirrel.StatementBuilderType
+	table string
+	fields []*Field
+	key []*Field
+	record ActiveRecord
+}
+
+func NewDbRecorder(builder *squirrel.StatementBuilderType) *DbRecorder {
+	r := new(DbRecorder)
+	r.builder = builder
+
+	return r
+}
+
+// Bind binds this particular instance to a particular record.
+func (s *DbRecorder) Bind(tableName string, ar ActiveRecord) *DbRecorder {
+	// Get the table name
+	s.table = tableName
+
+	// Get the fields
+	s.scanFields(ar)
+
+	s.record = ar
+
+	return s
+}
+
+// Key gets the string names of the fields used as primary key.
+func (s *DbRecorder) Key() []string {
+	key := make([]string, len(s.key))
+
+	for i, f := range s.key {
+		key[i] = f.column
+	}
+
+	return key
+}
+
+func (s *DbRecorder) Load() error {
+
+	whereParts := s.whereIds()
+
+	q := s.builder.Select(s.colList(false)...).From(s.table).Where(whereParts)
+	/*
+	//q := s.builder.Select("id_two").From("test_table").Where("id = ?", 1)
+	refs := make([]interface{}, 0, len(s.fields))
+	withKeys := false
+
+	ar := reflect.Indirect(reflect.ValueOf(s.record))
+	for _, f := range s.fields {
+		if !withKeys && f.isKey {
+			continue
+		}
+
+		//ref := reflect.ValueOf(ar.FieldByName(f.name)).Addr().Interface()
+		ref := reflect.Indirect(reflect.ValueOf(ar.FieldByName(f.name)))
+		if ref.IsValid() {
+			val := ref.Interface()
+			refs = append(refs, val)
+		} else { // Should never hit this part.
+			var skip interface{}
+			refs = append(refs, &skip)
+		}
+
+	}
+	*/
+
+	//ss, _, err := q.ToSql()
+	//println(ss)
+	err := q.QueryRow().Scan(s.fieldReferences(false)...)
+	// err := q.QueryRow().Scan(refs...)
+	//err := q.QueryRow().Scan(refs...)
+
+	return err
+}
+
+// colList gets a list of column names. If withKeys is false, columns that are
+// designated as primary keys will not be returned in this list.
+func (s *DbRecorder) colList(withKeys bool) []string {
+	names := make([]string, 0, len(s.fields))
+
+	for _, f := range s.fields {
+		if !withKeys && f.isKey {
+			continue
+		}
+		names = append(names, f.column)
+	}
+
+	return names
+}
+
+func (s *DbRecorder) fieldReferences(withKeys bool) []interface{} {
+	refs := make([]interface{}, 0, len(s.fields))
+
+	ar := reflect.Indirect(reflect.ValueOf(s.record))
+	for _, f := range s.fields {
+		if !withKeys && f.isKey {
+			continue
+		}
+
+		//ref := reflect.ValueOf(ar.FieldByName(f.name)).Addr().Interface()
+		ref := reflect.Indirect(reflect.ValueOf(ar.FieldByName(f.name)))
+		if ref.IsValid() {
+			refs = append(refs, ref.Interface())
+		} else { // Should never hit this part.
+			var skip interface{}
+			refs = append(refs, &skip)
+		}
+
+	}
+
+	return refs 
+}
+
+// whereIds gets a list of names and a list of values for all columns marked as primary
+// keys.
+func (s *DbRecorder) whereIds() map[string]interface{} { // ([]string, []interface{}) {
+	clause := make(map[string]interface{}, len(s.key))
+
+	ar := reflect.Indirect(reflect.ValueOf(s.record))
+
+	for _, f := range s.key {
+		clause[f.column] = ar.FieldByName(f.name).Interface()
+		//fmt.Printf("Where parts: %V", clause[f.column])
+	}
+
+
+	return clause
+}
+
+// scanFields extracts the tags from all of the fields on a struct.
+func (s *DbRecorder) scanFields(ar ActiveRecord) {
+	v := reflect.Indirect(reflect.ValueOf(ar))
+	t := v.Type()
+	count := t.NumField()
+	keys := make([]*Field, 0, 2)
+
+	for i := 0; i < count; i++ {
+		f := t.Field(i)
+		// Skip fields with no tag.
+		if len(f.Tag) == 0 {
+			continue
+		}
+		sqtag := f.Tag.Get("sqrl")
+		if len(sqtag) == 0 {
+			continue
+		}
+
+		parts := s.parseTag(f.Name, sqtag)
+		field := new(Field)
+		field.name = f.Name
+		field.column = parts[0]
+		for _, part := range parts[1:] {
+			switch part {
+			case "PRIMARY_KEY":
+				field.isKey = true
+				keys = append(keys, field)
+			}
+		}
+		s.fields = append(s.fields, field)
+		s.key = keys
+	}
+	
+}
+
+// Parse the contents of a sqrl tag.
+func (s *DbRecorder) parseTag(fieldName, tag string) []string {
+	parts := strings.Split(tag, " ")
+	if len(parts) == 0 {
+		return []string{fieldName}
+	}
+	return parts
+}
+
