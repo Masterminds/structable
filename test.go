@@ -1,1 +1,1 @@
-package squirrelrm
+package structable

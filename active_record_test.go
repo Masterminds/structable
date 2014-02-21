@@ -1,4 +1,4 @@
-package squirrelrm
+package structable
 
 import (
 	"testing"
@@ -9,7 +9,7 @@ import (
 )
 
 type Stool struct {
-	Id		 int	`sqrl:"id PRIMARY_KEY"`
+	Id		 int	`sqrl:"id PRIMARY_KEY AUTO_INCREMENT"`
 	Id2 	 int 	`sqrl:"id_two PRIMARY_KEY"`
 	Legs	 int    `sqrl:"number_of_legs"`
 	Material string `sqrl:"material"`
@@ -83,10 +83,38 @@ func TestLoad(t *testing.T) {
 		t.Errorf("Unexpected SQL: %s", db.LastQueryRowSql)
 	}
 
-	if db.LastQueryRowArgs[0].(int) != 1 {
-		t.Errorf("Expected 1")
+	expectargs := []interface{}{1, 2}
+	got := db.LastQueryRowArgs
+	for i, exp := range expectargs {
+		if exp != got[i] {
+			t.Errorf("Surprise! %v doesn't equal %v")
+		}
+	}
+}
+
+func TestInsert(t *testing.T) {
+	stool := newStool()
+	db := new(DBStub)
+
+	rec := NewDbRecorder(db).Bind("test_table", stool)
+
+	if err := rec.Insert(); err != nil {
+		t.Errorf("Failed insert: %s", err)
 	}
 
+	expect := "INSERT INTO test_table (id_two,number_of_legs,material) VALUES (?,?,?)"
+	if db.LastExecSql != expect {
+		t.Errorf("Expected '%s', got '%s'", expect, db.LastExecSql)
+	}
+
+	expectargs := []interface{}{stool.Id2, stool.Legs, stool.Material}
+	gotargs := db.LastExecArgs
+
+	for i := range expectargs {
+		if expectargs[i] != gotargs[i] {
+			t.Errorf("Expected %v, got %v", expectargs[i], gotargs[i])
+		}
+	}
 }
 
 func TestDelete(t *testing.T) {
@@ -160,7 +188,7 @@ func (s *DBStub) Prepare(query string) (*sql.Stmt, error) {
 func (s *DBStub) Exec(query string, args ...interface{}) (sql.Result, error) {
 	s.LastExecSql = query
 	s.LastExecArgs = args
-	return nil, nil
+	return &ResultStub{id: 1, affectedRows: 1}, nil
 }
 
 func (s *DBStub) Query(query string, args ...interface{}) (*sql.Rows, error) {
@@ -182,4 +210,15 @@ type RowStub struct {
 func (r *RowStub) Scan(_ ...interface{}) error {
 	r.Scanned = true
 	return nil
+}
+
+type ResultStub struct {
+	id, affectedRows int64
+}
+
+func (r *ResultStub) LastInsertId() (int64, error) {
+	return r.id, nil
+}
+func (r *ResultStub) RowsAffected() (int64, error) {
+	return r.affectedRows, nil
 }

@@ -1,4 +1,4 @@
-package squirrelrm
+package structable
 
 import (
 	"github.com/lann/squirrel"
@@ -13,7 +13,7 @@ const SquirrelrmTag = "sqrl"
 
 Example:
 	type Stool struct {
-		Id 		 int 	`sqrl:"id PRIMARY_KEY"`
+		Id 		 int 	`sqrl:"id PRIMARY_KEY AUTO_INCREMENT"`
 		Legs 	 int    `sqrl:"number_of_legs"`
 		Material string `sqrl:"material"`
 		Ignored  string // will not be stored.
@@ -25,12 +25,15 @@ type ActiveRecord interface {}
 
 type Field struct {
 	name, column string
+	// Is a primary key
 	isKey bool
+	// Is an auto increment
+	isAuto bool
 }
 
 type Recorder interface {
 	// Bind a tble name to an active record.
-	Bind(string, ActiveRecord)
+	Bind(string, ActiveRecord) Recorder
 	Insert() error
 	Update() error
 	Delete() error
@@ -59,7 +62,7 @@ func NewDbRecorder(db squirrel.DBProxy/*builder *squirrel.StatementBuilderType*/
 }
 
 // Bind binds this particular instance to a particular record.
-func (s *DbRecorder) Bind(tableName string, ar ActiveRecord) *DbRecorder {
+func (s *DbRecorder) Bind(tableName string, ar ActiveRecord) Recorder {
 	// Get the table name
 	s.table = tableName
 
@@ -68,7 +71,7 @@ func (s *DbRecorder) Bind(tableName string, ar ActiveRecord) *DbRecorder {
 
 	s.record = ar
 
-	return s
+	return Recorder(s)
 }
 
 // Key gets the string names of the fields used as primary key.
@@ -115,6 +118,33 @@ func (s *DbRecorder) Delete() error {
 	return err
 }
 
+func (s *DbRecorder) Insert() error {
+	cols, vals := s.insertFields()
+	q := s.builder.Insert(s.table).Columns(cols...).Values(vals...)
+
+	ret, err := q.Exec()
+
+	for _, f := range s.fields {
+		if f.isAuto {
+			ar := reflect.Indirect(reflect.ValueOf(s.record))
+			field := ar.FieldByName(f.name)
+			id, _ := ret.LastInsertId()
+			if !field.CanSet() {
+				return fmt.Errorf("Could not set %s to returned value", f.name)
+			}
+			field.SetInt(id)
+		}
+			
+	
+	}
+
+	return err
+}
+
+func (s *DbRecorder) Update() error {
+	return nil
+}
+
 // colList gets a list of column names. If withKeys is false, columns that are
 // designated as primary keys will not be returned in this list.
 func (s *DbRecorder) colList(withKeys bool) []string {
@@ -140,7 +170,7 @@ func (s *DbRecorder) fieldReferences(withKeys bool) []interface{} {
 		}
 
 		//ref := reflect.ValueOf(ar.FieldByName(f.name)).Addr().Interface()
-		ref := reflect.Indirect(reflect.ValueOf(ar.FieldByName(f.name)))
+		ref := reflect.Indirect(ar.FieldByName(f.name))
 		if ref.IsValid() {
 			refs = append(refs, ref.Interface())
 		} else { // Should never hit this part.
@@ -151,6 +181,31 @@ func (s *DbRecorder) fieldReferences(withKeys bool) []interface{} {
 	}
 
 	return refs 
+}
+
+func (s *DbRecorder) insertFields() (columns []string, values []interface{}) {
+	/*numFields := len(s.fields)
+	columns = make([]string, numFields)
+	values = make([]interface{}, numFields)
+	*/
+	ar := reflect.Indirect(reflect.ValueOf(s.record))
+
+	for _, field := range s.fields {
+		// Serial fields are automatically set, so we don't everride, lest
+		// we an invalid/duplicate key value.
+		if field.isAuto {
+			continue
+		}
+
+		// Get the value of the field we are going to store.
+		//v := reflect.Indirect(reflect.ValueOf(ar.FieldByName(field.name))).Interface()
+		v := ar.FieldByName(field.name).Interface()
+		
+		columns = append(columns, field.column)
+		values = append(values, v)
+	}
+
+	return
 }
 
 // whereIds gets a list of names and a list of values for all columns marked as primary
@@ -196,6 +251,8 @@ func (s *DbRecorder) scanFields(ar ActiveRecord) {
 			case "PRIMARY_KEY":
 				field.isKey = true
 				keys = append(keys, field)
+			case "AUTO_INCREMENT":
+				field.isAuto = true
 			}
 		}
 		s.fields = append(s.fields, field)
