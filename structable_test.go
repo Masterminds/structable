@@ -9,10 +9,10 @@ import (
 )
 
 type Stool struct {
-	Id		 int	`sqrl:"id PRIMARY_KEY AUTO_INCREMENT"`
-	Id2 	 int 	`sqrl:"id_two PRIMARY_KEY"`
-	Legs	 int    `sqrl:"number_of_legs"`
-	Material string `sqrl:"material"`
+	Id		 int	`stbl:"id PRIMARY_KEY AUTO_INCREMENT"`
+	Id2		int	`stbl:"id_two PRIMARY_KEY"`
+	Legs	 int    `stbl:"number_of_legs"`
+	Material string `stbl:"material"`
 	Ignored  string // will not be stored.
 }
 
@@ -26,6 +26,27 @@ func newStool() *Stool {
 	stool.Ignored = "Boo"
 
 	return stool
+}
+
+type ActRec struct {
+	Id int `stbl:"id PRIMARY_KEY AUTO_INCREMENT"`
+	Name string `stbl:"name"`
+	recorder Recorder
+}
+
+func NewActRec(db *DBStub) *ActRec {
+	a := new(ActRec)
+	
+	a.recorder = New(db).Bind("my_table", a)
+
+	return a
+}
+
+func (a *ActRec) Exists() bool {
+
+	ok, err := a.recorder.Exists()
+
+	return err == nil && ok
 }
 
 func TestBind(t *testing.T) {
@@ -56,15 +77,6 @@ func TestBind(t *testing.T) {
 	if len(store.Key()) != 2 {
 		t.Errorf("Wrong number of keys.")
 	}
-
-	/*
-	sql := store.loadSql().ToString()
-	expect := "SELECT number_of_legs, material FROM test_table WHERE id = ? AND id_two = ?"
-	if sql != expect {
-		t.Errorf("Got SQL '%s'", sql)
-	}
-	*/
-
 }
 
 func TestLoad(t *testing.T) {
@@ -72,7 +84,7 @@ func TestLoad(t *testing.T) {
 	db := &DBStub{}
 	//db, builder := squirrelFixture()
 
-	r := NewDbRecorder(db).Bind("test_table", stool)
+	r := New(db).Bind("test_table", stool)
 
 	if err := r.Load(); err != nil {
 		t.Errorf("Error running query: %s", err)
@@ -96,7 +108,7 @@ func TestInsert(t *testing.T) {
 	stool := newStool()
 	db := new(DBStub)
 
-	rec := NewDbRecorder(db).Bind("test_table", stool)
+	rec := New(db).Bind("test_table", stool)
 
 	if err := rec.Insert(); err != nil {
 		t.Errorf("Failed insert: %s", err)
@@ -117,10 +129,34 @@ func TestInsert(t *testing.T) {
 	}
 }
 
+func TestUpdate(t *testing.T) {
+	stool := newStool()
+	db := new(DBStub)
+
+	rec := New(db).Bind("test_table", stool)
+
+	if err := rec.Update(); err != nil {
+		t.Errorf("Update error: %s", err)
+	}
+
+	expect := "UPDATE test_table SET number_of_legs = ?, material = ? WHERE id = ? AND id_two = ?"
+	if db.LastExecSql != expect {
+		t.Errorf("Expected '%s', got '%s'", expect, db.LastExecSql)
+	}
+	eargs := []interface{}{3, "Stainless Steel", 1, 2}
+	gotargs := db.LastExecArgs
+	for i, exp := range eargs {
+		if exp != gotargs[i] {
+			t.Errorf("Expected arg %v, got %v", exp, gotargs[i])
+		}
+	}
+
+}
+
 func TestDelete(t *testing.T) {
 	stool := newStool()
 	db := &DBStub{}
-	r := NewDbRecorder(db).Bind("test_table", stool)
+	r := New(db).Bind("test_table", stool)
 
 	if err := r.Delete(); err != nil {
 		t.Errorf("Failed to delete: %s", err)
@@ -135,14 +171,14 @@ func TestDelete(t *testing.T) {
 	}
 }
 
-func TestHas(t *testing.T) {
+func TestExists(t *testing.T) {
 	stool := newStool()
 	db := &DBStub{}
-	r := NewDbRecorder(db).Bind("test_table", stool)
+	r := New(db).Bind("test_table", stool)
 
-	_, err := r.Has()
+	_, err := r.Exists()
 	if err != nil {
-		t.Errorf("Error calling Has: %s", err)
+		t.Errorf("Error calling Exists: %s", err)
 	}
 
 	expect := "SELECT COUNT(*) FROM test_table WHERE id = ? AND id_two = ?"
@@ -150,6 +186,17 @@ func TestHas(t *testing.T) {
 		t.Errorf("Unexpected SQL: %s", db.LastQueryRowSql)
 	}
 }
+
+func TestActiveRecord(t *testing.T) {
+	db := &DBStub{}
+	a := NewActRec(db)
+	a.Id = 999
+
+	if a.Exists() {
+		t.Errorf("Expected record to be absent.")
+	}
+}
+
 
 func squirrelFixture() (*DBStub, squirrel.StatementBuilderType) {
 
