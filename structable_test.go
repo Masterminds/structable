@@ -9,8 +9,8 @@ import (
 )
 
 type Stool struct {
-	Id		 int	`stbl:"id PRIMARY_KEY AUTO_INCREMENT"`
-	Id2		int	`stbl:"id_two PRIMARY_KEY"`
+	Id		 int	`stbl:"id,PRIMARY_KEY,AUTO_INCREMENT"`
+	Id2		int	`stbl:"id_two,    PRIMARY_KEY      "`
 	Legs	 int    `stbl:"number_of_legs"`
 	Material string `stbl:"material"`
 	Ignored  string // will not be stored.
@@ -29,7 +29,7 @@ func newStool() *Stool {
 }
 
 type ActRec struct {
-	Id int `stbl:"id PRIMARY_KEY AUTO_INCREMENT"`
+	Id int `stbl:"id,SERIAL,PRIMARY_KEY"`
 	Name string `stbl:"name"`
 	recorder Recorder
 }

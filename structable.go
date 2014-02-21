@@ -1,12 +1,14 @@
 /* Structable is a struct-to-table mapper for databases.
 
+THE INTERFACES DEFINED HERE MAY BE VOLATILE UNTIL MAY, 2014.
+
 Structable is not quite a struct-relational mapper. Instead of attempting to
 manage all aspects of relational mapping, it provides a basic CRUD layer for
 mapping structs to table rows in an existing schema.
 
 Importantly, Structable does not do any relation management. There is no
 magic to convert structs, arrays, or maps to references to other tables.
-(If you want that, you may prefer GORM)
+(If you want that, you may prefer GORM or GORP)
 
 Structable uses Squirrel for statement building, and you may also use
 Squirrel for working with your data.
@@ -16,7 +18,7 @@ Basic Usage:
 	// Implement a Record. Records use annotations to describe which
 	// struct fields are related to which database columns
 	type Foo struct {
-		Id int64 `stbl:"id PRIMARY_KEY AUTO_INCREMENT"`
+		Id int64 `stbl:"id,PRIMARY_KEY,AUTO_INCREMENT"`
 		Name string `stbl:"name"`
 		SomethingElse string // This has no tag, so is ingnored.
 	}
@@ -64,16 +66,16 @@ record and the recorder. See the unit tests for an example.
 
 The `stbl` tag is of the form:
 
-	stbl:"field_name [PRIMARY_KEY [AUTO_INCREMENT]]"
+	stbl:"field_name [,PRIMARY_KEY[,AUTO_INCREMENT]]"
 
 The field name is passed verbatim to the database. So `fieldName` will go to the database as `fieldName`.
 Structable is not at all opinionated about how you name your tables or fields. Some databases are, though, so
 you may need to be careful about your own naming conventions.
 
-`PRIMARY_KEY` tells Structable that this field is (one of the pieces of) the primary key.
+`PRIMARY_KEY` tells Structable that this field is (one of the pieces of) the primary key. Aliases: 'PRIMARY KEY'
 
 `AUTO_INCREMENT` tells Structable that this field is created by the database, and should never
-be assigned during an Insert().
+be assigned during an Insert(). Aliases: SERIAL, AUTO INCREMENT
 
 Things Structable doesn't do (by design)
 
@@ -127,6 +129,11 @@ type field struct {
 // can manage the persistent lifecycle of the record.
 type Recorder interface {
 	// Bind this Recorder to a table and to a Record.
+	//
+	// The table name is used verbatim. DO NOT TRUST USER-SUPPLIED VALUES.
+	//
+	// The struct is examined for tags, and those tags are parsed and used to determine
+	// details about each field.
 	Bind(string, Record) Recorder
 	// Insert inserts the bound Record into the bound table.
 	Insert() error
@@ -396,11 +403,12 @@ func (s *DbRecorder) scanFields(ar Record) {
 		field.name = f.Name
 		field.column = parts[0]
 		for _, part := range parts[1:] {
+			part = strings.TrimSpace(part)
 			switch part {
-			case "PRIMARY_KEY":
+			case "PRIMARY_KEY", "PRIMARY KEY":
 				field.isKey = true
 				keys = append(keys, field)
-			case "AUTO_INCREMENT":
+			case "AUTO_INCREMENT", "SERIAL", "AUTO INCREMENT":
 				field.isAuto = true
 			}
 		}
@@ -412,7 +420,7 @@ func (s *DbRecorder) scanFields(ar Record) {
 
 // Parse the contents of a stbl tag.
 func (s *DbRecorder) parseTag(fieldName, tag string) []string {
-	parts := strings.Split(tag, " ")
+	parts := strings.Split(tag, ",")
 	if len(parts) == 0 {
 		return []string{fieldName}
 	}
