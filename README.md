@@ -27,7 +27,23 @@ filling the following contract:
 Squirrel already provides the ability to perform more complicated
 operations.
 
-## How It Does It
+## How To Install It
+
+The usual way...
+
+```
+$ go get github.com/technosophos/structable
+```
+
+And import it via:
+
+```
+import "github.com/technosophos/structable"
+```
+
+## How To Use It
+
+[![GoDoc](https://godoc.org/github.com/technosophos/structable?status.png)](https://godoc.org/github.com/technosophos/structable)
 
 Structable works by mapping a struct to columns in a database.
 
@@ -51,7 +67,7 @@ To manage instances of this struct, you do something like this:
 
   // Create a new structable.Recorder and tell it to
   // bind the given struct as a row in the given table.
-  r := New(db).Bind("test_table", stool)
+  r := structable.New(db).Bind("test_table", stool)
 
   // This will insert the stool into the test_table.
   err := r.Insert()
