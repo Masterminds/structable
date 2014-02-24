@@ -79,10 +79,10 @@ be assigned during an Insert(). Aliases: SERIAL, AUTO INCREMENT
 
 Things Structable doesn't do (by design)
 
-- Guess table or column names. You must specify these.
-- Handle relations between tables.
-- Manage the schema.
-- Transform complex struct fields into simple ones (that is, serialize fields).
+	- Guess table or column names. You must specify these.
+	- Handle relations between tables.
+	- Manage the schema.
+	- Transform complex struct fields into simple ones (that is, serialize fields).
 
 
 */
@@ -245,7 +245,8 @@ func (s *DbRecorder) Delete() error {
 	// XXX: Change this when Squirrel has a Delete().
 	wheres := s.whereIds()
 
-	//s.builder.Delete(s.table).Where(wheres)
+	q := s.builder.Delete(s.table).Where(wheres)
+	/*
 	where := make([]string, 0, len(wheres))
 	vals := make([]interface{}, 0, len(wheres))
 	for k, v := range wheres {
@@ -253,7 +254,8 @@ func (s *DbRecorder) Delete() error {
 		vals = append(vals, v)
 	}
 	sql := fmt.Sprintf("DELETE FROM %s WHERE %s", s.table, strings.Join(where, " AND "))
-	_, err := s.db.Exec(sql, vals...)
+	*/
+	_, err := q.Exec()
 	return err
 }
 
