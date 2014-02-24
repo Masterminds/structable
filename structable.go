@@ -166,7 +166,7 @@ type Recorder interface {
 // Implements the Recorder interface, and stores data in a DB.
 type DbRecorder struct {
 	builder *squirrel.StatementBuilderType
-	db squirrel.DBProxy
+	//db squirrel.DBProxy
 	table string
 	fields []*field
 	key []*field
@@ -181,7 +181,7 @@ func New(db squirrel.DBProxy) *DbRecorder {
 	b := squirrel.StatementBuilder.RunWith(db)
 	r := new(DbRecorder)
 	r.builder = &b
-	r.db = db
+	//r.db = db
 
 	return r
 }
@@ -242,19 +242,8 @@ func (s *DbRecorder) Exists() (bool, error) {
 }
 
 func (s *DbRecorder) Delete() error {
-	// XXX: Change this when Squirrel has a Delete().
 	wheres := s.whereIds()
-
 	q := s.builder.Delete(s.table).Where(wheres)
-	/*
-	where := make([]string, 0, len(wheres))
-	vals := make([]interface{}, 0, len(wheres))
-	for k, v := range wheres {
-		where = append(where, fmt.Sprintf("%s = ?", k))
-		vals = append(vals, v)
-	}
-	sql := fmt.Sprintf("DELETE FROM %s WHERE %s", s.table, strings.Join(where, " AND "))
-	*/
 	_, err := q.Exec()
 	return err
 }
