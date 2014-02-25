@@ -37,7 +37,7 @@ type ActRec struct {
 func NewActRec(db *DBStub) *ActRec {
 	a := new(ActRec)
 	
-	a.recorder = New(db).Bind("my_table", a)
+	a.recorder = New(db, "mysql").Bind("my_table", a)
 
 	return a
 }
@@ -84,7 +84,7 @@ func TestLoad(t *testing.T) {
 	db := &DBStub{}
 	//db, builder := squirrelFixture()
 
-	r := New(db).Bind("test_table", stool)
+	r := New(db, "mysql").Bind("test_table", stool)
 
 	if err := r.Load(); err != nil {
 		t.Errorf("Error running query: %s", err)
@@ -108,7 +108,7 @@ func TestInsert(t *testing.T) {
 	stool := newStool()
 	db := new(DBStub)
 
-	rec := New(db).Bind("test_table", stool)
+	rec := New(db, "mysql").Bind("test_table", stool)
 
 	if err := rec.Insert(); err != nil {
 		t.Errorf("Failed insert: %s", err)
@@ -133,7 +133,7 @@ func TestUpdate(t *testing.T) {
 	stool := newStool()
 	db := new(DBStub)
 
-	rec := New(db).Bind("test_table", stool)
+	rec := New(db, "mysql").Bind("test_table", stool)
 
 	if err := rec.Update(); err != nil {
 		t.Errorf("Update error: %s", err)
@@ -156,7 +156,7 @@ func TestUpdate(t *testing.T) {
 func TestDelete(t *testing.T) {
 	stool := newStool()
 	db := &DBStub{}
-	r := New(db).Bind("test_table", stool)
+	r := New(db, "mysql").Bind("test_table", stool)
 
 	if err := r.Delete(); err != nil {
 		t.Errorf("Failed to delete: %s", err)
@@ -174,14 +174,14 @@ func TestDelete(t *testing.T) {
 func TestExists(t *testing.T) {
 	stool := newStool()
 	db := &DBStub{}
-	r := New(db).Bind("test_table", stool)
+	r := New(db, "mysql").Bind("test_table", stool)
 
 	_, err := r.Exists()
 	if err != nil {
 		t.Errorf("Error calling Exists: %s", err)
 	}
 
-	expect := "SELECT COUNT(*) FROM test_table WHERE id = ? AND id_two = ?"
+	expect := "SELECT COUNT(*) > 0 FROM test_table WHERE id = ? AND id_two = ?"
 	if db.LastQueryRowSql != expect {
 		t.Errorf("Unexpected SQL: %s", db.LastQueryRowSql)
 	}
@@ -248,6 +248,10 @@ func (s *DBStub) QueryRow(query string, args ...interface{}) squirrel.RowScanner
 	s.LastQueryRowSql = query
 	s.LastQueryRowArgs = args
 	return &squirrel.Row{RowScanner: &RowStub{}}
+}
+
+func (s *DBStub) Begin() (*sql.Tx, error) {
+	return nil, nil
 }
 
 type RowStub struct {

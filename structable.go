@@ -291,7 +291,6 @@ func (s *DbRecorder) insertStd() error {
 			if !field.CanSet() {
 				return fmt.Errorf("Could not set %s to returned value", f.name)
 			}
-			println(id)
 			field.SetInt(id)
 		}
 			

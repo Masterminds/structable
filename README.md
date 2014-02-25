@@ -67,7 +67,7 @@ To manage instances of this struct, you do something like this:
 
   // Create a new structable.Recorder and tell it to
   // bind the given struct as a row in the given table.
-  r := structable.New(db).Bind("test_table", stool)
+  r := structable.New(db, "mysql").Bind("test_table", stool)
 
   // This will insert the stool into the test_table.
   err := r.Insert()
@@ -78,6 +78,11 @@ And of course you have `Load()`, `Update()`, `Delete()` and so on.
 The target use case for Structable is to use it as a backend for an
 Active Record pattern. An example of this can be found in the
 `structable_test.go` file
+
+### Tested On
+
+- MySQL (5.5)
+- PostgreSQL (9.3)
 
 ## What It Does Not Do
 
