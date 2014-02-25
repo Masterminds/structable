@@ -93,6 +93,7 @@ import (
 	"reflect"
 	"strings"
 	"fmt"
+	"database/sql"
 )
 
 const StructableTag = "stbl"
@@ -166,34 +167,42 @@ type Recorder interface {
 // Implements the Recorder interface, and stores data in a DB.
 type DbRecorder struct {
 	builder *squirrel.StatementBuilderType
-	//db squirrel.DBProxy
+	db squirrel.DBProxyBeginner
 	table string
 	fields []*field
 	key []*field
 	record Record
+	flavor string
 }
 
 // New creates a new DbRecorder.
 //
 // (The squirrel.DBProxy interface defines the functions normal for a database connection
 // or a prepared statement cache.)
-func New(db squirrel.DBProxy) *DbRecorder {
+func New(db squirrel.DBProxyBeginner, flavor string) *DbRecorder {
 	b := squirrel.StatementBuilder.RunWith(db)
 	r := new(DbRecorder)
 	r.builder = &b
-	//r.db = db
+	r.db = db
+	r.flavor = flavor
+
+	if flavor == "postgres" {
+		b = b.PlaceholderFormat(squirrel.Dollar)
+	}
 
 	return r
 }
 
 
 // NewFromBuilder creates a new DbRecorder with an existing squirrel.StatementBuilderType.
+/*
 func NewFromBuilder(builder *squirrel.StatementBuilderType) *DbRecorder {
 	r := new(DbRecorder)
 	r.builder = builder
 
 	return r
 }
+*/
 
 // Bind binds this particular instance to a particular record.
 func (s *DbRecorder) Bind(tableName string, ar Record) Recorder {
@@ -224,21 +233,22 @@ func (s *DbRecorder) Key() []string {
 
 func (s *DbRecorder) Load() error {
 	whereParts := s.whereIds()
+	dest := s.fieldReferences(false)
 
 	q := s.builder.Select(s.colList(false)...).From(s.table).Where(whereParts)
-	err := q.QueryRow().Scan(s.fieldReferences(false)...)
+	err := q.QueryRow().Scan(dest...)
 
 	return err
 }
 
 func (s *DbRecorder) Exists() (bool, error) {
-	has := 0
+	has := false
 	whereParts := s.whereIds()
 
-	q := s.builder.Select("COUNT(*)").From(s.table).Where(whereParts)
-	err := q.QueryRow().Scan(has)
+	q := s.builder.Select("COUNT(*) > 0").From(s.table).Where(whereParts)
+	err := q.QueryRow().Scan(&has)
 
-	return (has > 0), err
+	return has, err
 }
 
 func (s *DbRecorder) Delete() error {
@@ -249,19 +259,39 @@ func (s *DbRecorder) Delete() error {
 }
 
 func (s *DbRecorder) Insert() error {
+	switch s.flavor {
+	case "postgres":
+		return s.insertPg()
+	default:
+		return s.insertStd()
+	}
+}
+
+// Insert and assume that LastInsertId() returns something.
+func (s *DbRecorder) insertStd() error {
 	cols, vals := s.insertFields()
 	q := s.builder.Insert(s.table).Columns(cols...).Values(vals...)
 
 	ret, err := q.Exec()
+	if err != nil {
+		return err
+	}
 
 	for _, f := range s.fields {
 		if f.isAuto {
 			ar := reflect.Indirect(reflect.ValueOf(s.record))
 			field := ar.FieldByName(f.name)
-			id, _ := ret.LastInsertId()
+
+			id, err := ret.LastInsertId()
+			if err != nil {
+				return fmt.Errorf("Could not get last insert ID. Did you set the db flavor? %s", err)
+				
+			}
+
 			if !field.CanSet() {
 				return fmt.Errorf("Could not set %s to returned value", f.name)
 			}
+			println(id)
 			field.SetInt(id)
 		}
 			
@@ -269,6 +299,66 @@ func (s *DbRecorder) Insert() error {
 	}
 
 	return err
+}
+
+type txRunner struct {
+	*sql.Tx
+}
+
+func (t txRunner) QueryRow(s string, v ...interface{}) squirrel.RowScanner {
+	return t.Tx.QueryRow(s, v)
+}
+
+
+
+// Postgres-specific insert.
+func (s *DbRecorder) insertPg() error {
+	cols, vals := s.insertFields()
+
+	txr, err := s.db.Begin()
+
+	// Satisfy the squirrel.Runner interface.
+	tx := txRunner{txr} //squirrel.NewStmtCacher(txr)
+
+	q := s.builder.Insert(s.table).Columns(cols...).Values(vals...)
+	//qq, aa, _ := q.ToSql()
+	//fmt.Printf("QQ:%s, args %d\n", qq, len(aa))
+
+
+	// Rollback unless Commit is called first.
+	defer txr.Rollback()
+
+	
+	if _, err = q.RunWith(tx).Exec(); err != nil {
+		return err
+	}
+
+	var lastid int64 = 0
+	for _, f := range s.fields {
+		if f.isAuto {
+			ar := reflect.Indirect(reflect.ValueOf(s.record))
+			field := ar.FieldByName(f.name)
+
+			if !field.CanSet() {
+				return fmt.Errorf("Could not set %s to returned value", f.name)
+			}
+
+			// Lazily grab id the first time we need it.
+			if lastid == 0 {
+				ss, _, _ := s.builder.Select("lastval()").ToSql()
+				err := txr.QueryRow(ss).Scan(&lastid)
+				//fmt.Printf("Last ID: %d\n", lastid)
+				if err != nil {
+					return err
+				}
+			}
+
+			field.SetInt(lastid)
+		}
+	}
+	txr.Commit()
+
+	return nil
 }
 
 func (s *DbRecorder) Update() error {
@@ -306,8 +396,9 @@ func (s *DbRecorder) fieldReferences(withKeys bool) []interface{} {
 		}
 
 		ref := reflect.Indirect(ar.FieldByName(f.name))
+		//ref := ar.FieldByName(f.name)
 		if ref.IsValid() {
-			refs = append(refs, ref.Interface())
+			refs = append(refs, ref.Addr().Interface())
 		} else { // Should never hit this part.
 			var skip interface{}
 			refs = append(refs, &skip)
