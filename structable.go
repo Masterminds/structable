@@ -36,7 +36,7 @@ Basic Usage:
 
 		// Create a recorder that is bound to our new struct. Not that we associate
 		// this to a database table (my_table) here, too.
-		recorder := NewRecorder(db).Bind("my_table", foo)
+		recorder := structable.New(db, "mysql").Bind("my_table", foo)
 
 		// At this point, the recorder is mutating our Foo instance. Operations on
 		// the recorder will change `foo`.
@@ -205,6 +205,12 @@ func NewFromBuilder(builder *squirrel.StatementBuilderType) *DbRecorder {
 */
 
 // Bind binds this particular instance to a particular record.
+//
+// This takes a given structable.Record and binds it to the recorder. That means
+// that the recorder will track all changes to the Record.
+//
+// The table name tells the recorder which database table to link this record
+// to. All storage operations will use that table.
 func (s *DbRecorder) Bind(tableName string, ar Record) Recorder {
 
 	// "To be is to be the value of a bound variable." - W. O. Quine
@@ -231,6 +237,9 @@ func (s *DbRecorder) Key() []string {
 	return key
 }
 
+// Load selects the record from the database and loads the values into the bound Record.
+//
+// This modifies the Record in-place.
 func (s *DbRecorder) Load() error {
 	whereParts := s.whereIds()
 	dest := s.fieldReferences(false)
@@ -241,6 +250,10 @@ func (s *DbRecorder) Load() error {
 	return err
 }
 
+// Exists returns `true` if and only if there is at least one record that matches the primary keys for this Record.
+//
+// If the primary key on the Record has no value, this will look for records with no value (or the default
+// value).
 func (s *DbRecorder) Exists() (bool, error) {
 	has := false
 	whereParts := s.whereIds()
@@ -251,6 +264,9 @@ func (s *DbRecorder) Exists() (bool, error) {
 	return has, err
 }
 
+// Delete deletes the record from the underlying table.
+//
+// The fields on the present record will remain set, but not saved in the database.
 func (s *DbRecorder) Delete() error {
 	wheres := s.whereIds()
 	q := s.builder.Delete(s.table).Where(wheres)
@@ -258,6 +274,10 @@ func (s *DbRecorder) Delete() error {
 	return err
 }
 
+// Insert puts a new record into the database.
+//
+// This operation is particularly sensitive to DB differences in cases where AUTO_INCREMENT is set
+// on a member of the Record.
 func (s *DbRecorder) Insert() error {
 	switch s.flavor {
 	case "postgres":
@@ -300,6 +320,7 @@ func (s *DbRecorder) insertStd() error {
 	return err
 }
 
+// This implements the squirrel.Runner interface correctly.
 type txRunner struct {
 	*sql.Tx
 }
@@ -360,6 +381,11 @@ func (s *DbRecorder) insertPg() error {
 	return nil
 }
 
+// Update update the values on an existing entry.
+//
+// This updates records where the Record's primary keys match the record in the database.
+//
+// If no entry is found, update will NOT create a new record.
 func (s *DbRecorder) Update() error {
 
 	whereParts := s.whereIds()
