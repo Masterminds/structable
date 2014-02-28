@@ -336,6 +336,9 @@ func (s *DbRecorder) insertPg() error {
 	cols, vals := s.insertFields()
 
 	txr, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
 
 	// Satisfy the squirrel.Runner interface.
 	tx := txRunner{txr} //squirrel.NewStmtCacher(txr)
@@ -349,7 +352,7 @@ func (s *DbRecorder) insertPg() error {
 	defer txr.Rollback()
 
 	
-	if _, err = q.RunWith(tx).Exec(); err != nil {
+	if _, err := q.RunWith(tx).Exec(); err != nil {
 		return err
 	}
 
