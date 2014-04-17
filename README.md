@@ -1,4 +1,4 @@
-# Sructable: Struct-Table Mapping for Go
+# Structable: Struct-Table Mapping for Go
 
 This library provides basic struct-to-table mapping for Go.
 
