@@ -4,6 +4,8 @@ import (
 	"testing"
 	"fmt"
 	"database/sql"
+	"strings"
+	"regexp"
 
 	"github.com/lann/squirrel"
 )
@@ -36,7 +38,7 @@ type ActRec struct {
 
 func NewActRec(db *DBStub) *ActRec {
 	a := new(ActRec)
-	
+
 	a.recorder = New(db, "mysql").Bind("my_table", a)
 
 	return a
@@ -104,6 +106,29 @@ func TestLoad(t *testing.T) {
 	}
 }
 
+func TestLoadWhere(t *testing.T) {
+	stool := newStool()
+	db := &DBStub{}
+
+	r := New(db, "mysql").Bind("test_table", stool)
+
+	if err := r.LoadWhere("number_of_legs = ?", 3); err != nil {
+		t.Errorf("Error running query: %s", err)
+	}
+
+	if len(db.LastQueryRowArgs) != 1 {
+		t.Errorf("Expected exactly one where arg.")
+	}
+
+	expect := "SELECT .* FROM test_table WHERE number_of_legs = ?"
+	if ok, err := regexp.MatchString(expect, db.LastQueryRowSql); err != nil {
+		t.Errorf("Failed to run regexp: %s", err)
+	} else if !ok {
+		t.Errorf("%s did not match pattern %s", db.LastQueryRowSql, expect)
+	}
+
+}
+
 func TestInsert(t *testing.T) {
 	stool := newStool()
 	db := new(DBStub)
@@ -139,16 +164,37 @@ func TestUpdate(t *testing.T) {
 		t.Errorf("Update error: %s", err)
 	}
 
+	/*
 	expect := "UPDATE test_table SET number_of_legs = ?, material = ? WHERE id = ? AND id_two = ?"
 	if db.LastExecSql != expect {
 		t.Errorf("Expected '%s', got '%s'", expect, db.LastExecSql)
+	}*/
+
+	if !strings.Contains(db.LastExecSql, "number_of_legs = ") {
+		t.Error("Expected 'number_of_legs' in query")
 	}
+	if !strings.Contains(db.LastExecSql, "material = ") {
+		t.Error("Expected 'material' in query")
+	}
+
 	eargs := []interface{}{3, "Stainless Steel", 1, 2}
 	gotargs := db.LastExecArgs
-	for i, exp := range eargs {
+	for _, exp := range eargs {
+		found := false
+		for _, arg := range gotargs {
+			if arg == exp {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Could not find %v in %v", exp, gotargs)
+		}
+		/*
 		if exp != gotargs[i] {
 			t.Errorf("Expected arg %v, got %v", exp, gotargs[i])
 		}
+		*/
 	}
 
 }
@@ -162,8 +208,8 @@ func TestDelete(t *testing.T) {
 		t.Errorf("Failed to delete: %s", err)
 	}
 
-	expect := "DELETE FROM test_table WHERE id = ? AND id_two = ?"
-	if db.LastExecSql != expect {
+	expect := "DELETE FROM test_table WHERE .* AND .*"
+	if ok, _ := regexp.MatchString(expect, db.LastExecSql); !ok {
 		t.Errorf("Unexpect query: %s", db.LastExecSql)
 	}
 	if db.LastExecArgs[0].(int) != 1 {

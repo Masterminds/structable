@@ -151,6 +151,13 @@ type Recorder interface {
 	// Checks to see if a Record exists in the bound table by checking for the presence of the PRIMARY_KEY(s).
 	Exists() (bool, error)
 
+	Loader
+
+	// This returns the column names used for the primary key.
+	//Key() []string
+}
+
+type Loader interface {
 	// Loads the entire Record using the value of the PRIMARY_KEY(s)
 	// This will only fetch columns that are mapped on the bound Record. But you can think of it
 	// as doing something like this:
@@ -159,9 +166,8 @@ type Recorder interface {
 	//
 	// And then mapping the result to the currently bound Record.
 	Load() error
-
-	// This returns the column names used for the primary key.
-	//Key() []string
+	// Load by a WHERE-like clause. See Squirrel's Where(pred, args)
+	LoadWhere(interface{}, ...interface{}) error
 }
 
 // Implements the Recorder interface, and stores data in a DB.
@@ -245,6 +251,25 @@ func (s *DbRecorder) Load() error {
 	dest := s.fieldReferences(false)
 
 	q := s.builder.Select(s.colList(false)...).From(s.table).Where(whereParts)
+	err := q.QueryRow().Scan(dest...)
+
+	return err
+}
+
+// LoadWhere loads an object based on a WHERE clause.
+//
+// This can be used to define alternate loaders:
+//
+// 	func (s *MyStructable) LoadUuid(uuid string) error {
+// 		return s.LoadWhere("uuid = ?", uuid)
+// 	}
+//
+// This functions similarly to Load, but with the notable differance that
+// it loads the entire object (it does not skip keys used to do the lookup).
+func (s *DbRecorder) LoadWhere(pred interface{}, args ...interface{}) error {
+	dest := s.fieldReferences(true)
+
+	q := s.builder.Select(s.colList(true)...).From(s.table).Where(pred, args...)
 	err := q.QueryRow().Scan(dest...)
 
 	return err
@@ -434,7 +459,7 @@ func (s *DbRecorder) fieldReferences(withKeys bool) []interface{} {
 
 	}
 
-	return refs 
+	return refs
 }
 
 func (s *DbRecorder) insertFields() (columns []string, values []interface{}) {
