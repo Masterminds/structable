@@ -1,0 +1,3 @@
+package: github.com/technosophos/structable
+import:
+  - package: github.com/lann/squirrel
