@@ -1,5 +1,8 @@
 # Structable: Struct-Table Mapping for Go
 
+**WARNING:** The current master branch uses a different Recorder
+interface than the 1.0.0 release. It will soon be released as 2.0.0.
+
 This library provides basic struct-to-table mapping for Go.
 
 It is based on the [Squirrel](https://github.com/lann/squirrel) library.
@@ -21,6 +24,7 @@ filling the following contract:
     Delete() error // DELETE just one record
     Exists() (bool, error) // Check for just one record
     Load() error  // SELECT just one record
+    LoadWhere(cond interface{}, args ...interface{}) error // Alternate Load()
   }
 ```
 
