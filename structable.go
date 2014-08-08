@@ -199,7 +199,6 @@ func New(db squirrel.DBProxyBeginner, flavor string) *DbRecorder {
 	return r
 }
 
-
 // NewFromBuilder creates a new DbRecorder with an existing squirrel.StatementBuilderType.
 /*
 func NewFromBuilder(builder *squirrel.StatementBuilderType) *DbRecorder {

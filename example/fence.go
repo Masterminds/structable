@@ -1,11 +1,11 @@
-package example
+package main
 
 import (
 	"github.com/lann/squirrel"
 	"github.com/technosophos/structable"
 )
-const FenceTable = "fences"
 
+const FenceTable = "fences"
 // Fence represents a Geofence boundary.
 //
 // This struct is stubbed out to show how an ActiveRecord pattern might look
@@ -29,7 +29,7 @@ type Fence struct {
 	Longitude float64 `stbl:"longitude"`
 
 	rec structable.Recorder
-	builder *squirrel.StatementBuilderType
+	builder squirrel.StatementBuilderType
 }
 
 // NewFence creates a new empty fence.
@@ -39,14 +39,14 @@ type Fence struct {
 //
 // Flavor may be one of 'mysql', 'postgres'. Other DBs may
 // work, but are untested.
-func NewFence(db squirrel.DBProxy, dbFlavor string) *Fence {
+func NewFence(db squirrel.DBProxyBeginner, dbFlavor string) *Fence {
 	f := new(Fence)
 	f.builder = squirrel.StatementBuilder.RunWith(db)
 
-  // For Postgres we convert '?' to '$N' placeholders.
-  if dbFlavor == "postgres" {
-    f.builder = f.builder.PlaceholderFormat(squirrel.Dollar)
-  }
+	// For Postgres we convert '?' to '$N' placeholders.
+	if dbFlavor == "postgres" {
+		f.builder = f.builder.PlaceholderFormat(squirrel.Dollar)
+	}
 
 	f.rec = structable.New(db, dbFlavor).Bind(FenceTable, f)
 
@@ -88,8 +88,9 @@ func (r *Fence) Load() error {
 //  fmt.Printf("Loaded ID %d\n", fence.Id)
 //
 func (r *Fence) LoadGeopoint() error {
-  q := r.rec.Select("id, radius, region").From(FenceTable).
-    Where("latitude = ? AND longitude = ?", r.Latitude, r.Longitude)
+  //q := r.rec.Select("id, radius, region").From(FenceTable).
+  //  Where("latitude = ? AND longitude = ?", r.Latitude, r.Longitude)
 
-  return q.Query().Scan(&r.Id, &r.Radius, &r.Region)
+  //return q.Query().Scan(&r.Id, &r.Radius, &r.Region)
+  return r.rec.LoadWhere("latitude = ? AND longitude = ?", r.Latitude, r.Longitude)
 }
