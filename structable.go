@@ -1,7 +1,5 @@
 /* Structable is a struct-to-table mapper for databases.
 
-THE INTERFACES DEFINED HERE MAY BE VOLATILE UNTIL MAY, 2014.
-
 Structable is not quite a struct-relational mapper. Instead of attempting to
 manage all aspects of relational mapping, it provides a basic CRUD layer for
 mapping structs to table rows in an existing schema.
@@ -101,6 +99,7 @@ const StructableTag = "stbl"
 /* Record describes a struct that can be stored.
 
 Example:
+
 	type Stool struct {
 		Id 		 int 	`stbl:"id PRIMARY_KEY AUTO_INCREMENT"`
 		Legs 	 int    `stbl:"number_of_legs"`
@@ -174,6 +173,7 @@ type Loader interface {
 type DbRecorder struct {
 	builder *squirrel.StatementBuilderType
 	db squirrel.DBProxyBeginner
+	//db squirrel.BaseRunner
 	table string
 	fields []*field
 	key []*field
@@ -244,7 +244,11 @@ func (s *DbRecorder) Key() []string {
 
 // Load selects the record from the database and loads the values into the bound Record.
 //
-// This modifies the Record in-place.
+// Load uses the table's PRIMARY KEY(s) as the sole criterion for matching a
+// record. Essentially, it is akin to `SELECT * FROM table WHERE primary_key = ?`.
+//
+// This modifies the Record in-place. Other than the primary key fields, any
+// other field will be overwritten by the value retrieved from the database.
 func (s *DbRecorder) Load() error {
 	whereParts := s.whereIds()
 	dest := s.fieldReferences(false)
@@ -329,7 +333,6 @@ func (s *DbRecorder) insertStd() error {
 			id, err := ret.LastInsertId()
 			if err != nil {
 				return fmt.Errorf("Could not get last insert ID. Did you set the db flavor? %s", err)
-				
 			}
 
 			if !field.CanSet() {
@@ -337,8 +340,6 @@ func (s *DbRecorder) insertStd() error {
 			}
 			field.SetInt(id)
 		}
-			
-	
 	}
 
 	return err
@@ -349,6 +350,7 @@ type txRunner struct {
 	*sql.Tx
 }
 
+// QueryRows runs a transaction's QueryRows.
 func (t txRunner) QueryRow(s string, v ...interface{}) squirrel.RowScanner {
 	return t.Tx.QueryRow(s, v)
 }
@@ -359,6 +361,7 @@ func (t txRunner) QueryRow(s string, v ...interface{}) squirrel.RowScanner {
 func (s *DbRecorder) insertPg() error {
 	cols, vals := s.insertFields()
 
+	/*
 	txr, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -366,16 +369,23 @@ func (s *DbRecorder) insertPg() error {
 
 	// Satisfy the squirrel.Runner interface.
 	tx := txRunner{txr} //squirrel.NewStmtCacher(txr)
+	*/
 
-	q := s.builder.Insert(s.table).Columns(cols...).Values(vals...)
-	//qq, aa, _ := q.ToSql()
-	//fmt.Printf("QQ:%s, args %d\n", qq, len(aa))
+	dest := s.fieldReferences(true)
+	q := s.builder.Insert(s.table).Columns(cols...).Values(vals...).
+		Suffix("RETURNING " + strings.Join(s.colList(true), ","))
 
+	sql, vals, err := q.ToSql()
+	if err != nil {
+		return err
+	}
+	return s.db.QueryRow(sql, vals...).Scan(dest...)
+	//return q.QueryRow().Scan(dest...)
 
+	/*
 	// Rollback unless Commit is called first.
 	defer txr.Rollback()
 
-	
 	if _, err := q.RunWith(tx).Exec(); err != nil {
 		return err
 	}
@@ -406,13 +416,15 @@ func (s *DbRecorder) insertPg() error {
 	txr.Commit()
 
 	return nil
+	*/
 }
 
-// Update update the values on an existing entry.
+// Update updates the values on an existing entry.
 //
-// This updates records where the Record's primary keys match the record in the database.
+// This updates records where the Record's primary keys match the record in the
+// database. Essentially, it runs `UPDATE table SET names=values WHERE id=?`
 //
-// If no entry is found, update will NOT create a new record.
+// If no entry is found, update will NOT create (INSERT) a new record.
 func (s *DbRecorder) Update() error {
 
 	whereParts := s.whereIds()
@@ -474,7 +486,7 @@ func (s *DbRecorder) insertFields() (columns []string, values []interface{}) {
 		// Get the value of the field we are going to store.
 		//v := reflect.Indirect(reflect.ValueOf(ar.FieldByName(field.name))).Interface()
 		v := ar.FieldByName(field.name).Interface()
-		
+
 		columns = append(columns, field.column)
 		values = append(values, v)
 	}
@@ -482,7 +494,7 @@ func (s *DbRecorder) insertFields() (columns []string, values []interface{}) {
 	return
 }
 
-// Produce fields to go into SetMap for an update.
+// updateFields produces fields to go into SetMap for an update.
 // This will NOT update PRIMARY_KEY fields.
 func (s *DbRecorder) updateFields() map[string]interface{} {
 	ar := reflect.Indirect(reflect.ValueOf(s.record))
@@ -500,7 +512,7 @@ func (s *DbRecorder) updateFields() map[string]interface{} {
 
 // whereIds gets a list of names and a list of values for all columns marked as primary
 // keys.
-func (s *DbRecorder) whereIds() map[string]interface{} { // ([]string, []interface{}) {
+func (s *DbRecorder) whereIds() map[string]interface{} {
 	clause := make(map[string]interface{}, len(s.key))
 
 	ar := reflect.Indirect(reflect.ValueOf(s.record))
@@ -509,7 +521,6 @@ func (s *DbRecorder) whereIds() map[string]interface{} { // ([]string, []interfa
 		clause[f.column] = ar.FieldByName(f.name).Interface()
 		//fmt.Printf("Where parts: %V", clause[f.column])
 	}
-
 
 	return clause
 }
@@ -549,10 +560,9 @@ func (s *DbRecorder) scanFields(ar Record) {
 		s.fields = append(s.fields, field)
 		s.key = keys
 	}
-	
 }
 
-// Parse the contents of a stbl tag.
+// parseTag parses the contents of a stbl tag.
 func (s *DbRecorder) parseTag(fieldName, tag string) []string {
 	parts := strings.Split(tag, ",")
 	if len(parts) == 0 {
