@@ -27,8 +27,7 @@ type User struct {
 // Of particular importance, watch how we intialize the Recorder.
 func NewUser(db squirrel.DBProxyBeginner, dbFlavor string) *User {
 	u := new(User)
-	u.Recorder = structable.New(db, dbFlavor)
-	u.Recorder.Bind(UserTable, u)
+	u.Recorder = structable.New(db, dbFlavor).Bind(UserTable, u)
 	return u
 }
 
@@ -43,8 +42,11 @@ func (u *User) LoadByName() error {
 func main() {
 
 	// Boilerplate DB setup.
+	// First, we need to know the database driver.
 	driver := "postgres"
+	// Second, we need a database connection.
 	con, _ := sql.Open(driver, "dbname=structable_test sslmode=disable")
+	// Third, we wrap in a prepared statement cache for better performance.
 	cache := squirrel.NewStmtCacheProxy(con)
 
 	// Create an empty new user and give it some properties.
@@ -56,9 +58,7 @@ func main() {
 	if err := user.Insert(); err != nil {
 		panic(err.Error())
 	}
-
-	// The insertion will set the ID.
-	fmt.Printf("User ID: %d\n", user.Id)
+	fmt.Printf("Initial insert has ID %d, name %s, and email %s\n", user.Id, user.Name, user.Email)
 
 	// Now create another empty User and set the user's Name.
 	again := NewUser(cache, driver)
@@ -68,10 +68,17 @@ func main() {
 	if err := again.LoadByName(); err != nil {
 		panic(err.Error())
 	}
-	fmt.Printf("User by name has ID %d\n", again.Id)
+	fmt.Printf("User by name has ID %d and email %s\n", again.Id, again.Email)
+
+	again.Email = "technosophos@example.com"
+	if err := again.Update(); err != nil {
+		panic(err.Error())
+	}
+	fmt.Printf("Updated user has ID %d and email %s\n", again.Id, again.Email)
 
 	// Delete using the built-in Deleter. (delete by Id.)
 	if err := again.Delete(); err != nil {
 		panic(err.Error())
 	}
+	fmt.Printf("Deleted user %d\n", again.Id)
 }
