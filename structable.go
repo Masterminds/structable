@@ -195,22 +195,10 @@ type Recorder interface {
 	// The struct is examined for tags, and those tags are parsed and used to determine
 	// details about each field.
 	Bind(string, Record) Recorder
-	// Insert inserts the bound Record into the bound table.
-	Insert() error
-
-	// Update updates all of the fields on the bound Record based on the PRIMARY_KEY fields.
-	//
-	// Essentially, it does something like this:
-	// 	UPDATE bound_table SET every=?, field=?, but=?, keys=? WHERE primary_key=?
-	Update() error
-
-	// Deletes a Record based on its PRIMARY_KEY(s).
-	Delete() error
-
-	// Checks to see if a Record exists in the bound table by checking for the presence of the PRIMARY_KEY(s).
-	Exists() (bool, error)
 
 	Loader
+	Haecceity
+	Saver
 
 	// This returns the column names used for the primary key.
 	//Key() []string
@@ -227,6 +215,34 @@ type Loader interface {
 	Load() error
 	// Load by a WHERE-like clause. See Squirrel's Where(pred, args)
 	LoadWhere(interface{}, ...interface{}) error
+}
+
+type Saver interface {
+	// Insert inserts the bound Record into the bound table.
+	Insert() error
+
+	// Update updates all of the fields on the bound Record based on the PRIMARY_KEY fields.
+	//
+	// Essentially, it does something like this:
+	// 	UPDATE bound_table SET every=?, field=?, but=?, keys=? WHERE primary_key=?
+	Update() error
+
+	// Deletes a Record based on its PRIMARY_KEY(s).
+	Delete() error
+}
+
+// Haecceity implements John Duns Scotus.
+//
+// Actually, it is responsible for testing whether a thing exists, and is
+// what we think it is.
+type Haecceity interface {
+	// Exists verifies that a thing exists and is of this type.
+	// This uses the PRIMARY_KEY to verify that a record exists.
+	Exists() (bool, error)
+	// ExistsWhere verifies that a thing exists and is of the expected type.
+	// It takes a WHERE clause, and it needs to gaurantee that at least one
+	// record matches. It need not assure that *only* one item exists.
+	ExistsWhere(interface{}, ...interface{}) (bool, error)
 }
 
 // Implements the Recorder interface, and stores data in a DB.
@@ -336,6 +352,15 @@ func (s *DbRecorder) Exists() (bool, error) {
 	whereParts := s.whereIds()
 
 	q := s.builder.Select("COUNT(*) > 0").From(s.table).Where(whereParts)
+	err := q.QueryRow().Scan(&has)
+
+	return has, err
+}
+
+func (s *DbRecorder) ExistsWhere(pred interface{}, args ...interface{}) (bool, error) {
+	has := false
+
+	q := s.builder.Select("COUNT(*) > 0").From(s.table).Where(pred, args...)
 	err := q.QueryRow().Scan(&has)
 
 	return has, err
