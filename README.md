@@ -1,7 +1,7 @@
 # Structable: Struct-Table Mapping for Go
 
-**WARNING:** The current master branch uses a different Recorder
-interface than the 1.0.0 release. It will soon be released as 2.0.0.
+**Warning:** Structable 3.0.0 has new interfaces, and is incompatible
+with older versions of Structable.
 
 This library provides basic struct-to-table mapping for Go.
 
@@ -23,6 +23,7 @@ filling the following contract:
     Update() error // UPDATE just one record
     Delete() error // DELETE just one record
     Exists() (bool, error) // Check for just one record
+    ExistsWhere(cond interface{}, args ...interface{}) (bool, error)
     Load() error  // SELECT just one record
     LoadWhere(cond interface{}, args ...interface{}) error // Alternate Load()
   }
