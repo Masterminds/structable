@@ -143,10 +143,10 @@ However, Squirrel can ease many of these tasks.
 package structable
 
 import (
+	"fmt"
 	"github.com/lann/squirrel"
 	"reflect"
 	"strings"
-	"fmt"
 )
 
 // 'stbl' is the main tag used for annotating Structable Records.
@@ -169,7 +169,7 @@ key (with auto-incrementing values) called 'id', an int field named
 on the database implementation).
 
 */
-type Record interface {}
+type Record interface{}
 
 // Internal representation of a field on a database table, and its
 // relation to a struct field.
@@ -248,12 +248,12 @@ type Haecceity interface {
 // Implements the Recorder interface, and stores data in a DB.
 type DbRecorder struct {
 	builder *squirrel.StatementBuilderType
-	db squirrel.DBProxyBeginner
-	table string
-	fields []*field
-	key []*field
-	record Record
-	flavor string
+	db      squirrel.DBProxyBeginner
+	table   string
+	fields  []*field
+	key     []*field
+	record  Record
+	flavor  string
 }
 
 // New creates a new DbRecorder.
@@ -321,6 +321,12 @@ func (s *DbRecorder) Load() error {
 	q := s.builder.Select(s.colList(false)...).From(s.table).Where(whereParts)
 	err := q.QueryRow().Scan(dest...)
 
+	if err == nil {
+		if v, ok := s.record.(AfterLoader); ok {
+			return v.AfterLoad()
+		}
+	}
+
 	return err
 }
 
@@ -339,6 +345,12 @@ func (s *DbRecorder) LoadWhere(pred interface{}, args ...interface{}) error {
 
 	q := s.builder.Select(s.colList(true)...).From(s.table).Where(pred, args...)
 	err := q.QueryRow().Scan(dest...)
+
+	if err == nil {
+		if v, ok := s.record.(AfterLoader); ok {
+			return v.AfterLoad()
+		}
+	}
 
 	return err
 }
@@ -370,6 +382,12 @@ func (s *DbRecorder) ExistsWhere(pred interface{}, args ...interface{}) (bool, e
 //
 // The fields on the present record will remain set, but not saved in the database.
 func (s *DbRecorder) Delete() error {
+	if v, ok := s.record.(BeforeDeleter); ok {
+		if err := v.BeforeDelete(); err != nil {
+			return err
+		}
+	}
+
 	wheres := s.whereIds()
 	q := s.builder.Delete(s.table).Where(wheres)
 	_, err := q.Exec()
@@ -381,12 +399,28 @@ func (s *DbRecorder) Delete() error {
 // This operation is particularly sensitive to DB differences in cases where AUTO_INCREMENT is set
 // on a member of the Record.
 func (s *DbRecorder) Insert() error {
+	var err error
+
+	if v, ok := s.record.(BeforeInserter); ok {
+		if err = v.BeforeInsert(); err != nil {
+			return err
+		}
+	}
+
 	switch s.flavor {
 	case "postgres":
-		return s.insertPg()
+		err = s.insertPg()
 	default:
-		return s.insertStd()
+		err = s.insertStd()
 	}
+
+	if err == nil {
+		if v, ok := s.record.(AfterInserter); ok {
+			return v.AfterInsert()
+		}
+	}
+
+	return err
 }
 
 // Insert and assume that LastInsertId() returns something.
@@ -444,12 +478,24 @@ func (s *DbRecorder) insertPg() error {
 //
 // If no entry is found, update will NOT create (INSERT) a new record.
 func (s *DbRecorder) Update() error {
+	if v, ok := s.record.(BeforeUpdater); ok {
+		if err := v.BeforeUpdate(); err != nil {
+			return err
+		}
+	}
 
 	whereParts := s.whereIds()
 	updates := s.updateFields()
 	q := s.builder.Update(s.table).SetMap(updates).Where(whereParts)
 
 	_, err := q.Exec()
+
+	if err == nil {
+		if v, ok := s.record.(AfterUpdater); ok {
+			return v.AfterUpdate()
+		}
+	}
+
 	return err
 }
 
@@ -588,4 +634,3 @@ func (s *DbRecorder) parseTag(fieldName, tag string) []string {
 	}
 	return parts
 }
-
