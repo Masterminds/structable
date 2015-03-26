@@ -1,19 +1,19 @@
 package structable
 
 import (
-	"testing"
-	"fmt"
 	"database/sql"
-	"strings"
+	"fmt"
 	"regexp"
+	"strings"
+	"testing"
 
 	"github.com/lann/squirrel"
 )
 
 type Stool struct {
-	Id		 int	`stbl:"id,PRIMARY_KEY,AUTO_INCREMENT"`
-	Id2		int	`stbl:"id_two,    PRIMARY_KEY      "`
-	Legs	 int    `stbl:"number_of_legs"`
+	Id       int    `stbl:"id,PRIMARY_KEY,AUTO_INCREMENT"`
+	Id2      int    `stbl:"id_two,    PRIMARY_KEY      "`
+	Legs     int    `stbl:"number_of_legs"`
 	Material string `stbl:"material"`
 	Ignored  string // will not be stored.
 }
@@ -31,9 +31,49 @@ func newStool() *Stool {
 }
 
 type ActRec struct {
-	Id int `stbl:"id,SERIAL,PRIMARY_KEY"`
-	Name string `stbl:"name"`
+	Id       int    `stbl:"id,SERIAL,PRIMARY_KEY"`
+	Name     string `stbl:"name"`
 	recorder Recorder
+}
+
+type Hooked struct {
+	Id       int `stbl:"id,AUTO_INCREMENT,PRIMARY_KEY"`
+	Value    int `stbl:"value"`
+	Break    string
+	Executed []string
+}
+
+func (this *Hooked) hookExec(name string) error {
+	this.Executed = append(this.Executed, name)
+	if this.Break == name {
+		this.Executed = append(this.Executed, "Break"+name)
+		return fmt.Errorf("Break")
+	}
+	return nil
+}
+
+func (this *Hooked) AfterLoad() error {
+	return this.hookExec("AfterLoad")
+}
+
+func (this *Hooked) BeforeInsert() error {
+	return this.hookExec("BeforeInsert")
+}
+
+func (this *Hooked) AfterInsert() error {
+	return this.hookExec("AfterInsert")
+}
+
+func (this *Hooked) BeforeUpdate() error {
+	return this.hookExec("BeforeUpdate")
+}
+
+func (this *Hooked) AfterUpdate() error {
+	return this.hookExec("AfterUpdate")
+}
+
+func (this *Hooked) BeforeDelete() error {
+	return this.hookExec("BeforeDelete")
 }
 
 func NewActRec(db *DBStub) *ActRec {
@@ -101,7 +141,7 @@ func TestLoad(t *testing.T) {
 	got := db.LastQueryRowArgs
 	for i, exp := range expectargs {
 		if exp != got[i] {
-			t.Errorf("Surprise! %v doesn't equal %v")
+			t.Errorf("Surprise! %v doesn't equal %v", exp, got[i])
 		}
 	}
 }
@@ -165,10 +205,10 @@ func TestUpdate(t *testing.T) {
 	}
 
 	/*
-	expect := "UPDATE test_table SET number_of_legs = ?, material = ? WHERE id = ? AND id_two = ?"
-	if db.LastExecSql != expect {
-		t.Errorf("Expected '%s', got '%s'", expect, db.LastExecSql)
-	}*/
+		expect := "UPDATE test_table SET number_of_legs = ?, material = ? WHERE id = ? AND id_two = ?"
+		if db.LastExecSql != expect {
+			t.Errorf("Expected '%s', got '%s'", expect, db.LastExecSql)
+		}*/
 
 	if !strings.Contains(db.LastExecSql, "number_of_legs = ") {
 		t.Error("Expected 'number_of_legs' in query")
@@ -191,9 +231,9 @@ func TestUpdate(t *testing.T) {
 			t.Errorf("Could not find %v in %v", exp, gotargs)
 		}
 		/*
-		if exp != gotargs[i] {
-			t.Errorf("Expected arg %v, got %v", exp, gotargs[i])
-		}
+			if exp != gotargs[i] {
+				t.Errorf("Expected arg %v, got %v", exp, gotargs[i])
+			}
 		*/
 	}
 
@@ -243,6 +283,56 @@ func TestActiveRecord(t *testing.T) {
 	}
 }
 
+func TestHooks(t *testing.T) {
+	hooked := &Hooked{}
+	db := &DBStub{}
+	r := New(db, "mysql").Bind("test_table", hooked)
+
+	i := 0
+
+	check := func(err error, values ...string) {
+		if err != nil && err.Error() != "Break" {
+			t.Error(err)
+		}
+		n := len(values)
+		i = i + n
+		if len(hooked.Executed) != i {
+			t.Errorf("%d != %d", len(hooked.Executed), i)
+		} else {
+			for index, item := range hooked.Executed[i-n:] {
+				if values[index] != item {
+					t.Errorf("%s != %s", values[index], item)
+				}
+			}
+			// fmt.Print(hooked.Executed)
+		}
+	}
+
+	check(r.Load(), "AfterLoad")
+	check(r.LoadWhere("1=1"), "AfterLoad")
+	check(r.Insert(), "BeforeInsert", "AfterInsert")
+	check(r.Update(), "BeforeUpdate", "AfterUpdate")
+	check(r.Delete(), "BeforeDelete")
+
+	hooked.Break = "AfterLoad"
+	check(r.Load(), "AfterLoad", "BreakAfterLoad")
+	check(r.LoadWhere("1=1"), "AfterLoad", "BreakAfterLoad")
+
+	hooked.Break = "BeforeInsert"
+	check(r.Insert(), "BeforeInsert", "BreakBeforeInsert")
+
+	hooked.Break = "AfterInsert"
+	check(r.Insert(), "BeforeInsert", "AfterInsert", "BreakAfterInsert")
+
+	hooked.Break = "BeforeUpdate"
+	check(r.Update(), "BeforeUpdate", "BreakBeforeUpdate")
+
+	hooked.Break = "AfterUpdate"
+	check(r.Update(), "BeforeUpdate", "AfterUpdate", "BreakAfterUpdate")
+
+	hooked.Break = "BeforeDelete"
+	check(r.Delete(), "BeforeDelete", "BreakBeforeDelete")
+}
 
 func squirrelFixture() (*DBStub, squirrel.StatementBuilderType) {
 
@@ -251,7 +341,6 @@ func squirrelFixture() (*DBStub, squirrel.StatementBuilderType) {
 	return db, squirrel.StatementBuilder.RunWith(db)
 
 }
-
 
 // FIXTURES
 type DBStub struct {
