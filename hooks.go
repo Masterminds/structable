@@ -1,7 +1,7 @@
 package structable
 
 /*
-Structable supports hooks. All hook func have the save signature:
+Hook func have the same signature:
 
 func (this *Struct) () error
 
