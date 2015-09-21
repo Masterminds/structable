@@ -1,19 +1,19 @@
 package structable
 
 import (
-	"testing"
-	"fmt"
 	"database/sql"
-	"strings"
+	"fmt"
 	"regexp"
+	"strings"
+	"testing"
 
-	"github.com/lann/squirrel"
+	"github.com/Masterminds/squirrel"
 )
 
 type Stool struct {
-	Id		 int	`stbl:"id,PRIMARY_KEY,AUTO_INCREMENT"`
-	Id2		int	`stbl:"id_two,    PRIMARY_KEY      "`
-	Legs	 int    `stbl:"number_of_legs"`
+	Id       int    `stbl:"id,PRIMARY_KEY,AUTO_INCREMENT"`
+	Id2      int    `stbl:"id_two,    PRIMARY_KEY      "`
+	Legs     int    `stbl:"number_of_legs"`
 	Material string `stbl:"material"`
 	Ignored  string // will not be stored.
 }
@@ -31,8 +31,8 @@ func newStool() *Stool {
 }
 
 type ActRec struct {
-	Id int `stbl:"id,SERIAL,PRIMARY_KEY"`
-	Name string `stbl:"name"`
+	Id       int    `stbl:"id,SERIAL,PRIMARY_KEY"`
+	Name     string `stbl:"name"`
 	recorder Recorder
 }
 
@@ -165,10 +165,10 @@ func TestUpdate(t *testing.T) {
 	}
 
 	/*
-	expect := "UPDATE test_table SET number_of_legs = ?, material = ? WHERE id = ? AND id_two = ?"
-	if db.LastExecSql != expect {
-		t.Errorf("Expected '%s', got '%s'", expect, db.LastExecSql)
-	}*/
+		expect := "UPDATE test_table SET number_of_legs = ?, material = ? WHERE id = ? AND id_two = ?"
+		if db.LastExecSql != expect {
+			t.Errorf("Expected '%s', got '%s'", expect, db.LastExecSql)
+		}*/
 
 	if !strings.Contains(db.LastExecSql, "number_of_legs = ") {
 		t.Error("Expected 'number_of_legs' in query")
@@ -191,9 +191,9 @@ func TestUpdate(t *testing.T) {
 			t.Errorf("Could not find %v in %v", exp, gotargs)
 		}
 		/*
-		if exp != gotargs[i] {
-			t.Errorf("Expected arg %v, got %v", exp, gotargs[i])
-		}
+			if exp != gotargs[i] {
+				t.Errorf("Expected arg %v, got %v", exp, gotargs[i])
+			}
 		*/
 	}
 
@@ -243,7 +243,6 @@ func TestActiveRecord(t *testing.T) {
 	}
 }
 
-
 func squirrelFixture() (*DBStub, squirrel.StatementBuilderType) {
 
 	db := &DBStub{}
@@ -251,7 +250,6 @@ func squirrelFixture() (*DBStub, squirrel.StatementBuilderType) {
 	return db, squirrel.StatementBuilder.RunWith(db)
 
 }
-
 
 // FIXTURES
 type DBStub struct {

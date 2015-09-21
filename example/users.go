@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/lann/squirrel"
-	"github.com/technosophos/structable"
+	"github.com/Masterminds/squirrel"
+	"github.com/Masterminds/structable"
 	_ "github.com/lib/pq"
 
 	"database/sql"
@@ -17,8 +17,8 @@ type User struct {
 	structable.Recorder
 	builder squirrel.StatementBuilderType
 
-	Id int `stbl:"id,PRIMARY_KEY,SERIAL"`
-	Name string `stbl:"name"`
+	Id    int    `stbl:"id,PRIMARY_KEY,SERIAL"`
+	Name  string `stbl:"name"`
 	Email string `stbl:"email"`
 }
 
@@ -70,7 +70,7 @@ func main() {
 	}
 	fmt.Printf("User by name has ID %d and email %s\n", again.Id, again.Email)
 
-	again.Email = "technosophos@example.com"
+	again.Email = "Masterminds@example.com"
 	if err := again.Update(); err != nil {
 		panic(err.Error())
 	}

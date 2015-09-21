@@ -37,8 +37,8 @@ The following example is taken from the `example/users.go` file.
 	package main
 
 	import (
-		"github.com/lann/squirrel"
-		"github.com/technosophos/structable"
+		"github.com/Masterminds/squirrel"
+		"github.com/Masterminds/structable"
 		_ "github.com/lib/pq"
 
 		"database/sql"
@@ -143,10 +143,10 @@ However, Squirrel can ease many of these tasks.
 package structable
 
 import (
-	"github.com/lann/squirrel"
+	"fmt"
+	"github.com/Masterminds/squirrel"
 	"reflect"
 	"strings"
-	"fmt"
 )
 
 // 'stbl' is the main tag used for annotating Structable Records.
@@ -169,7 +169,7 @@ key (with auto-incrementing values) called 'id', an int field named
 on the database implementation).
 
 */
-type Record interface {}
+type Record interface{}
 
 // Internal representation of a field on a database table, and its
 // relation to a struct field.
@@ -248,12 +248,12 @@ type Haecceity interface {
 // Implements the Recorder interface, and stores data in a DB.
 type DbRecorder struct {
 	builder *squirrel.StatementBuilderType
-	db squirrel.DBProxyBeginner
-	table string
-	fields []*field
-	key []*field
-	record Record
-	flavor string
+	db      squirrel.DBProxyBeginner
+	table   string
+	fields  []*field
+	key     []*field
+	record  Record
+	flavor  string
 }
 
 // New creates a new DbRecorder.
@@ -588,4 +588,3 @@ func (s *DbRecorder) parseTag(fieldName, tag string) []string {
 	}
 	return parts
 }
-

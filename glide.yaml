@@ -1,3 +1,5 @@
-package: github.com/technosophos/structable
+package: github.com/Masterminds/structable
 import:
-  - package: github.com/lann/squirrel
+  - package: github.com/Masterminds/squirrel
+  - package: github.com/lann/builder
+  - package: github.com/lann/ps

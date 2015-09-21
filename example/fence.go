@@ -1,11 +1,12 @@
 package main
 
 import (
-	"github.com/lann/squirrel"
-	"github.com/technosophos/structable"
+	"github.com/Masterminds/squirrel"
+	"github.com/Masterminds/structable"
 )
 
 const FenceTable = "fences"
+
 // Fence represents a Geofence boundary.
 //
 // This struct is stubbed out to show how an ActiveRecord pattern might look
@@ -22,13 +23,13 @@ const FenceTable = "fences"
 //  PRIMARY KEY(id),
 //  );
 type Fence struct {
-	Id int `stbl:"id,PRIMARY_KEY,SERIAL"`
-	Region int `stbl:"region"`
-	Radius float64 `stbl:"radius"`
-	Latitude float64 `stbl:"latitude"`
+	Id        int     `stbl:"id,PRIMARY_KEY,SERIAL"`
+	Region    int     `stbl:"region"`
+	Radius    float64 `stbl:"radius"`
+	Latitude  float64 `stbl:"latitude"`
 	Longitude float64 `stbl:"longitude"`
 
-	rec structable.Recorder
+	rec     structable.Recorder
 	builder squirrel.StatementBuilderType
 }
 
@@ -57,18 +58,22 @@ func NewFence(db squirrel.DBProxyBeginner, dbFlavor string) *Fence {
 func (r *Fence) Insert() error {
 	return r.rec.Insert()
 }
+
 // Update modifies an existing record
 func (r *Fence) Update() error {
 	return r.rec.Update()
 }
+
 // Delete removes a record.
 func (r *Fence) Delete() error {
 	return r.rec.Delete()
 }
+
 // Has returns true if the record exists.
 func (r *Fence) Has() (bool, error) {
 	return r.rec.Exists()
 }
+
 // Load populates the struct with data from storage.
 // It presumes that the id field is set.
 func (r *Fence) Load() error {
@@ -88,9 +93,9 @@ func (r *Fence) Load() error {
 //  fmt.Printf("Loaded ID %d\n", fence.Id)
 //
 func (r *Fence) LoadGeopoint() error {
-  //q := r.rec.Select("id, radius, region").From(FenceTable).
-  //  Where("latitude = ? AND longitude = ?", r.Latitude, r.Longitude)
+	//q := r.rec.Select("id, radius, region").From(FenceTable).
+	//  Where("latitude = ? AND longitude = ?", r.Latitude, r.Longitude)
 
-  //return q.Query().Scan(&r.Id, &r.Radius, &r.Region)
-  return r.rec.LoadWhere("latitude = ? AND longitude = ?", r.Latitude, r.Longitude)
+	//return q.Query().Scan(&r.Id, &r.Radius, &r.Region)
+	return r.rec.LoadWhere("latitude = ? AND longitude = ?", r.Latitude, r.Longitude)
 }
