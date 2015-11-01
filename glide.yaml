@@ -3,3 +3,4 @@ import:
   - package: github.com/Masterminds/squirrel
   - package: github.com/lann/builder
   - package: github.com/lann/ps
+  - package: github.com/lib/pq
