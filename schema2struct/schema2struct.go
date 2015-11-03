@@ -29,6 +29,7 @@ import (
 	"github.com/Masterminds/structable"
 	_ "github.com/lib/pq"
 	"database/sql"
+	"time"
 )
 
 `
@@ -43,7 +44,7 @@ type {{.StructName}} struct {
 }
 
 // New{{.StructName}} creates a new {{.StructName}} wired to structable.
-func New{{.StructName}}(db squirrel.DBProxyBeginner, dbFlavor string) *{{.StructName}} {
+func New{{.StructName}}(db squirrel.DBProxyBeginner, flavor string) *{{.StructName}} {
 	o := new({{.StructName}})
 	o.Recorder = structable.New(db, flavor).Bind("{{.TableName}}", o)
 	return o
