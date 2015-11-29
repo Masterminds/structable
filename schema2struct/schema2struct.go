@@ -37,7 +37,7 @@ import (
 const structTemplate = `// {{.StructName}} maps to database table {{.TableName}}
 type {{.StructName}} struct {
 	tableName string {{ann "tablename" .TableName}}
-	structable.DescriberRecorder
+	structable.Recorder
 	builder squirrel.StatementBuilderType
 	{{range .Fields}}{{.}}
 	{{end}}
@@ -46,7 +46,7 @@ type {{.StructName}} struct {
 // New{{.StructName}} creates a new {{.StructName}} wired to structable.
 func New{{.StructName}}(db squirrel.DBProxyBeginner, flavor string) *{{.StructName}} {
 	o := new({{.StructName}})
-	o.DescriberRecorder = structable.New(db, flavor).Bind("{{.TableName}}", o)
+	o.Recorder = structable.New(db, flavor).Bind("{{.TableName}}", o)
 	return o
 }
 

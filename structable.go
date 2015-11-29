@@ -200,6 +200,7 @@ type Recorder interface {
 	Loader
 	Haecceity
 	Saver
+	Describer
 
 	// This returns the column names used for the primary key.
 	//Key() []string
@@ -266,10 +267,10 @@ type Describer interface {
 }
 
 // DescriberRecorder is a Describer and a Recorder
-type DescriberRecorder interface {
-	Describer
-	Recorder
-}
+//type DescriberRecorder interface {
+//Describer
+//Recorder
+//}
 
 // List returns a list of objects of the given kind.
 //
