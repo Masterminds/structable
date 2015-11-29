@@ -49,6 +49,9 @@ func New{{.StructName}}(db squirrel.DBProxyBeginner, flavor string) *{{.StructNa
 	o.Recorder = structable.New(db, flavor).Bind("{{.TableName}}", o)
 	return o
 }
+
+func (v {{.StructName}}) List(limit, offset uint64) ([]*{{.StructName}}, error) {
+}
 `
 
 type structDesc struct {
