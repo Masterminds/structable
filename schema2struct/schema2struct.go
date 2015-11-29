@@ -25,11 +25,11 @@ generating the appropriate code.
 const fileHeader = `package model
 
 import (
+	"time"
+
 	"github.com/Masterminds/squirrel"
 	"github.com/Masterminds/structable"
 	_ "github.com/lib/pq"
-	"database/sql"
-	"time"
 )
 
 `
@@ -37,7 +37,7 @@ import (
 const structTemplate = `// {{.StructName}} maps to database table {{.TableName}}
 type {{.StructName}} struct {
 	tableName string {{ann "tablename" .TableName}}
-	structable.Recorder
+	structable.DescriberRecorder
 	builder squirrel.StatementBuilderType
 	{{range .Fields}}{{.}}
 	{{end}}
@@ -46,7 +46,7 @@ type {{.StructName}} struct {
 // New{{.StructName}} creates a new {{.StructName}} wired to structable.
 func New{{.StructName}}(db squirrel.DBProxyBeginner, flavor string) *{{.StructName}} {
 	o := new({{.StructName}})
-	o.Recorder = structable.New(db, flavor).Bind("{{.TableName}}", o)
+	o.DescriberRecorder = structable.New(db, flavor).Bind("{{.TableName}}", o)
 	return o
 }
 
@@ -54,7 +54,7 @@ func New{{.StructName}}(db squirrel.DBProxyBeginner, flavor string) *{{.StructNa
 //
 // limit is the max number of items to return, offset is the offset (for paging).
 func (v {{.StructName}}) List(limit, offset uint64) ([]*{{.StructName}}, error) {
-	o, err := List(new({{.StructName}}), limit, offset)
+	o, err := structable.List(new({{.StructName}}), limit, offset)
 	if err != nil {
 		return []*{{.StructName}}{}, err
 	}
