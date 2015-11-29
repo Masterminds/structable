@@ -50,7 +50,19 @@ func New{{.StructName}}(db squirrel.DBProxyBeginner, flavor string) *{{.StructNa
 	return o
 }
 
+// List lists the {{.StructName}} items found in the table.
+//
+// limit is the max number of items to return, offset is the offset (for paging).
 func (v {{.StructName}}) List(limit, offset uint64) ([]*{{.StructName}}, error) {
+	o, err := List(new({{.StructName}}), limit, offset)
+	if err != nil {
+		return []*{{.StructName}}{}, err
+	}
+
+	res := make([]*{{.StructName}}, len(o))
+	for i, obj := range o {
+		res[i] = obj.(*{{.StructName}})
+	}
 }
 `
 
@@ -273,7 +285,7 @@ func sequentialKey(tbl, pk string, b squirrel.StatementBuilderType) bool {
 
 func structField(c *column, pks []string, tbl string, b squirrel.StatementBuilderType) string {
 	tpl := "%s %s `stbl:\"%s\"`"
-	gn := goName(c.Name)
+	gn := destutter(goName(c.Name), goName(tbl))
 	tt := goType(c.DataType)
 
 	tag := c.Name
@@ -336,4 +348,9 @@ func goName(sqlName string) string {
 	goName = strings.Replace(goName, " ", "", -1)
 
 	return goName
+}
+
+// destutter removes a stutter prefix.
+func destutter(str, prefix string) string {
+	return strings.TrimPrefix(str, prefix)
 }
