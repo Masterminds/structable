@@ -128,6 +128,22 @@ func TestLoadWhere(t *testing.T) {
 	}
 
 }
+func TestList(t *testing.T) {
+	stool := newStool()
+	db := &DBStub{}
+	//db, builder := squirrelFixture()
+
+	r := New(db, "mysql").Bind("test_table", stool)
+
+	if _, err := List(r.(Describer), 10, 0); err != nil {
+		t.Errorf("Error running query: %s", err)
+	}
+
+	expect := "SELECT number_of_legs, material FROM test_table LIMIT 10 OFFSET 0"
+	if db.LastQuerySql != expect {
+		t.Errorf("Unexpected SQL: %q\nGot %q", expect, db.LastQuerySql)
+	}
+}
 
 func TestInsert(t *testing.T) {
 	stool := newStool()
