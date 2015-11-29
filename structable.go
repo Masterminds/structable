@@ -276,8 +276,9 @@ type Describer interface {
 //
 // This runs a Select of the given kind, and returns the results.
 func List(d Describer, limit, offset uint64) ([]Describer, error) {
-	q := d.Builder().Select(d.Columns(false)...).From(d.TableName()).
-		Limit(limit).Offset(offset)
+	var tn string = d.TableName()
+	var cols []string = d.Columns(false)
+	q := d.Builder().Select(cols...).From(tn).Limit(limit).Offset(offset)
 	rows, err := q.Query()
 	if err != nil || rows == nil {
 		return []Describer{}, err

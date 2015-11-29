@@ -12,3 +12,27 @@ render structs that point to those tables.
 
 If you are interested in contributing to moving this beyond proof of
 concept, feel free to issue PRs against the codebase.
+
+## Usage
+
+Install using `make install`. This will put `schema2struct` on your
+`$PATH`.
+
+In the package where you want to create the structs, add an annotation
+to one of the Go files:
+
+```go
+//go:generate schema2struct -f schemata.go
+```
+
+The above annotation will instruct `go generate` to run `schema2struct`
+and generate a file called `schemata.go`.
+
+Finally, run `go generate` in that  package's directory:
+
+```
+$ cd model
+$ go generate
+```
+
+The result should be a `schemata.go` source file.
