@@ -205,10 +205,6 @@ type Recorder interface {
 	//Key() []string
 }
 
-type pRecorder interface {
-	FieldReferences(bool) []interface{}
-}
-
 type Loader interface {
 	// Loads the entire Record using the value of the PRIMARY_KEY(s)
 	// This will only fetch columns that are mapped on the bound Record. But you can think of it
@@ -267,6 +263,12 @@ type Describer interface {
 	Builder() *squirrel.StatementBuilderType
 	// DB returns a DB-like handle.
 	DB() squirrel.DBProxyBeginner
+}
+
+// DescriberRecorder is a Describer and a Recorder
+type DescriberRecorder interface {
+	Describer
+	Recorder
 }
 
 // List returns a list of objects of the given kind.
