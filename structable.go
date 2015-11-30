@@ -291,8 +291,9 @@ func List(d Describer, limit, offset uint64) ([]Describer, error) {
 	buf := []Describer{}
 	for rows.Next() {
 		nv := reflect.New(t)
+		rnv := reflect.Indirect(nv)
 		for i := 0; i < numfields; i++ {
-			nv.Field(i).Set(v.Field(i))
+			rnv.Field(i).Set(v.Field(i))
 		}
 		s := nv.Interface().(Describer)
 		dest := s.FieldReferences(false)
