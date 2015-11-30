@@ -322,13 +322,13 @@ func New(db squirrel.DBProxyBeginner, flavor string) *DbRecorder {
 // Init initializes a DbRecorder
 func (d *DbRecorder) Init(db squirrel.DBProxyBeginner, flavor string) {
 	b := squirrel.StatementBuilder.RunWith(db)
-	d.builder = &b
-	d.db = db
-	d.flavor = flavor
-
 	if flavor == "postgres" {
 		b = b.PlaceholderFormat(squirrel.Dollar)
 	}
+
+	d.builder = &b
+	d.db = db
+	d.flavor = flavor
 }
 
 func (s *DbRecorder) TableName() string {
