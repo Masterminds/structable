@@ -286,10 +286,15 @@ func List(d Describer, limit, offset uint64) ([]Describer, error) {
 
 	v := reflect.Indirect(reflect.ValueOf(d))
 	t := v.Type()
+	numfields := v.NumField()
 
 	buf := []Describer{}
 	for rows.Next() {
-		s := reflect.New(t).Interface().(Describer)
+		nv := reflect.New(t)
+		for i := 0; i < numfields; i++ {
+			nv.Field(i).Set(v.Field(i))
+		}
+		s := nv.Interface().(Describer)
 		dest := s.FieldReferences(false)
 		rows.Scan(dest...)
 		buf = append(buf, s)
