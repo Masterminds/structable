@@ -264,13 +264,11 @@ type Describer interface {
 	Builder() *squirrel.StatementBuilderType
 	// DB returns a DB-like handle.
 	DB() squirrel.DBProxyBeginner
-}
 
-// DescriberRecorder is a Describer and a Recorder
-//type DescriberRecorder interface {
-//Describer
-//Recorder
-//}
+	Driver() string
+
+	Init(d squirrel.DBProxyBeginner, flavor string)
+}
 
 // List returns a list of objects of the given kind.
 //
@@ -286,16 +284,12 @@ func List(d Describer, limit, offset uint64) ([]Describer, error) {
 
 	v := reflect.Indirect(reflect.ValueOf(d))
 	t := v.Type()
-	numfields := v.NumField()
 
 	buf := []Describer{}
 	for rows.Next() {
 		nv := reflect.New(t)
-		rnv := reflect.Indirect(nv)
-		for i := 0; i < numfields; i++ {
-			rnv.Field(i).Set(v.Field(i))
-		}
 		s := nv.Interface().(Describer)
+		s.Init(d.DB(), d.Driver())
 		dest := s.FieldReferences(false)
 		rows.Scan(dest...)
 		buf = append(buf, s)
@@ -320,17 +314,21 @@ type DbRecorder struct {
 // (The squirrel.DBProxy interface defines the functions normal for a database connection
 // or a prepared statement cache.)
 func New(db squirrel.DBProxyBeginner, flavor string) *DbRecorder {
+	d := new(DbRecorder)
+	d.Init(db, flavor)
+	return d
+}
+
+// Init initializes a DbRecorder
+func (d *DbRecorder) Init(db squirrel.DBProxyBeginner, flavor string) {
 	b := squirrel.StatementBuilder.RunWith(db)
-	r := new(DbRecorder)
-	r.builder = &b
-	r.db = db
-	r.flavor = flavor
+	d.builder = &b
+	d.db = db
+	d.flavor = flavor
 
 	if flavor == "postgres" {
 		b = b.PlaceholderFormat(squirrel.Dollar)
 	}
-
-	return r
 }
 
 func (s *DbRecorder) TableName() string {
@@ -341,6 +339,9 @@ func (s *DbRecorder) DB() squirrel.DBProxyBeginner {
 }
 func (s *DbRecorder) Builder() *squirrel.StatementBuilderType {
 	return s.builder
+}
+func (s *DbRecorder) Driver() string {
+	return s.flavor
 }
 
 // Bind binds a DbRecorder to a Record.
