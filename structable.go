@@ -295,7 +295,7 @@ func List(d Describer, limit, offset uint64) ([]Describer, error) {
 		buf = append(buf, s)
 	}
 
-	return buf, err
+	return buf, rows.Err()
 }
 
 // Implements the Recorder interface, and stores data in a DB.

@@ -67,6 +67,38 @@ func (v {{.StructName}}) List(limit, offset uint64) ([]*{{.StructName}}, error) 
 	}
 	return res, nil
 }
+
+// List{{.StructName}} returns a list of {{.StructName}} objects.
+//
+// Limit is the max number of items. Offset is the offset the results will
+// begin with.
+func List{{.StructName}}(db squirrel.DBProxyBeginner, flavor string, limit, offset uint64) ([]*{{.StructName}}, error) {
+	var tn string = "{{.TableName}}"
+
+	// We need a prototype structable to learn about the table structure.
+	ps := New{{.StructName}}(db, flavor)
+	cols := ps.Columns(true)
+
+	q := ps.Builder().Select(cols...).From(tn).Limit(limit).Offset(offset)
+	rows, err := q.Query()
+	if err != nil || rows == nil {
+		return []*{{.StructName}}{}, err
+	}
+	defer rows.Close()
+
+	buf := []*{{.StructName}}{}
+	for rows.Next() {
+		o := New{{.StructName}}(db, flavor)
+		dest := o.FieldReferences(false)
+		if err := rows.Scan(dest...); err != nil {
+			return buf, err
+		}
+		buf = append(buf, o)
+	}
+
+	return buf, rows.Err()
+}
+
 `
 
 type structDesc struct {
