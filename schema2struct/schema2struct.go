@@ -34,6 +34,12 @@ import (
 	_ "github.com/lib/pq"
 )
 
+// QueryFunc modifies a SelectBuilder prior to execution.
+//
+// The SelectBuilder is modified in place. An error is returned under any
+// conditions where the query should not be executed.
+type QueryFunc func(q squirrel.SelectBuilder) (squirrel.SelectBuilder, error)
+
 `
 
 const structTemplate = `// {{.StructName}} maps to database table {{.TableName}}
@@ -52,34 +58,39 @@ func New{{.StructName}}(db squirrel.DBProxyBeginner, flavor string) *{{.StructNa
 	return o
 }
 
-// List lists the {{.StructName}} items found in the table.
-//
-// limit is the max number of items to return, offset is the offset (for paging).
-func (v {{.StructName}}) List(limit, offset uint64) ([]*{{.StructName}}, error) {
-	o, err := structable.List(v, limit, offset)
-	if err != nil {
-		return []*{{.StructName}}{}, err
-	}
-
-	res := make([]*{{.StructName}}, len(o))
-	for i, obj := range o {
-		res[i] = obj.(*{{.StructName}})
-	}
-	return res, nil
-}
-
 // List{{.StructName}} returns a list of {{.StructName}} objects.
 //
 // Limit is the max number of items. Offset is the offset the results will
 // begin with.
 func List{{.StructName}}(db squirrel.DBProxyBeginner, flavor string, limit, offset uint64) ([]*{{.StructName}}, error) {
+	fn := func(q squirrel.SelectBuilder) (squirrel.SelectBuilder, error) {
+		return q.Limit(limit).Offset(offset), nil
+	}
+	return Query{{.StructName}}(db, flavor, fn)
+}
+
+// Query{{.StructName}} builds a base query, but allows the query to be modified before execution.
+//
+// This creates a new Select, settings the columns and table name, and then calling QueryFunc with the
+// query. The QueryFunc can then add a Where clause, etc. Provided QueryFunc does not exit with an
+// error, Query{{.StructName}} will then execute the query, extract the results into a slice of
+// {{.StructName}} structs, and then return.
+//
+// The QueryFunc should not modify the list of fields returned or the table name,
+// as the intent is to construct a complete {{.StructName}} from each result.
+// More sophisticated queries should be written directly.
+func Query{{.StructName}}(db squirrel.DBProxyBeginner, flavor string, fn QueryFunc) ([]*{{.StructName}}, error){
 	var tn string = "{{.TableName}}"
 
 	// We need a prototype structable to learn about the table structure.
 	ps := New{{.StructName}}(db, flavor)
 	cols := ps.Columns(true)
 
-	q := ps.Builder().Select(cols...).From(tn).Limit(limit).Offset(offset)
+	q := ps.Builder().Select(cols...).From(tn)
+	var err error
+	if q, err = fn(q); err != nil {
+		return []*{{.StructName}}{}, err
+	}
 	rows, err := q.Query()
 	if err != nil || rows == nil {
 		return []*{{.StructName}}{}, err
@@ -89,14 +100,36 @@ func List{{.StructName}}(db squirrel.DBProxyBeginner, flavor string, limit, offs
 	buf := []*{{.StructName}}{}
 	for rows.Next() {
 		o := New{{.StructName}}(db, flavor)
-		dest := o.FieldReferences(false)
+		dest := o.FieldReferences(true)
 		if err := rows.Scan(dest...); err != nil {
 			return buf, err
 		}
 		buf = append(buf, o)
 	}
-
 	return buf, rows.Err()
+}
+
+// Len{{.StructName}} returns the number of {{.StructName}} objects in the database.
+func Len{{.StructName}}(db squirrel.DBProxyBeginner, flavor string) (int, error) {
+	fn := func(q squirrel.SelectBuilder) (squirrel.SelectBuilder, error) {return q, nil}
+	return QueryLen{{.StructName}}(db, flavor, fn)
+}
+
+// QueryLen{{.StructName}} returns the length of a table.
+//
+// The QueryFunc can be used to modify the query. For a simple length call, you
+// may prefer to use Len{{.StructName}}.
+func QueryLen{{.StructName}}(db squirrel.DBProxyBeginner, flavor string, fn QueryFunc) (int, error) {
+	tn := "{{.TableName}}"
+	ps := New{{.StructName}}(db, flavor)
+	q := ps.Builder().Select("COUNT(*)").From(tn)
+	var err error
+	if q, err = fn(q); err != nil {
+		return 0, err
+	}
+	var count int
+	err = q.Scan(&count)
+	return count, err
 }
 
 `
