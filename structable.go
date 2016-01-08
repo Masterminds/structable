@@ -332,7 +332,7 @@ func (s *DbRecorder) Load() error {
 // 		return s.LoadWhere("uuid = ?", uuid)
 // 	}
 //
-// This functions similarly to Load, but with the notable differance that
+// This functions similarly to Load, but with the notable difference that
 // it loads the entire object (it does not skip keys used to do the lookup).
 func (s *DbRecorder) LoadWhere(pred interface{}, args ...interface{}) error {
 	dest := s.fieldReferences(true)
@@ -357,6 +357,10 @@ func (s *DbRecorder) Exists() (bool, error) {
 	return has, err
 }
 
+// ExistsWhere returns `true` if and only if there is at least one record that matches one (or multiple) conditions.
+//
+// Conditions are expressed in the form of predicates and expected values
+// that together build a WHERE clause. See Squirrel's Where(pred, args)
 func (s *DbRecorder) ExistsWhere(pred interface{}, args ...interface{}) (bool, error) {
 	has := false
 
