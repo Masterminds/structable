@@ -318,7 +318,7 @@ func (s *DbRecorder) Load() error {
 	whereParts := s.whereIds()
 	dest := s.fieldReferences(false)
 
-	q := s.builder.Select(s.colList(false)...).From(s.table).Where(whereParts)
+	q := s.builder.Select(s.colList(false, false)...).From(s.table).Where(whereParts)
 	err := q.QueryRow().Scan(dest...)
 
 	return err
@@ -337,7 +337,7 @@ func (s *DbRecorder) Load() error {
 func (s *DbRecorder) LoadWhere(pred interface{}, args ...interface{}) error {
 	dest := s.fieldReferences(true)
 
-	q := s.builder.Select(s.colList(true)...).From(s.table).Where(pred, args...)
+	q := s.builder.Select(s.colList(true, true)...).From(s.table).Where(pred, args...)
 	err := q.QueryRow().Scan(dest...)
 
 	return err
@@ -431,7 +431,7 @@ func (s *DbRecorder) insertPg() error {
 
 	dest := s.fieldReferences(true)
 	q := s.builder.Insert(s.table).Columns(cols...).Values(vals...).
-		Suffix("RETURNING " + strings.Join(s.colList(true), ","))
+		Suffix("RETURNING " + strings.Join(s.colList(true, false), ","))
 
 	sql, vals, err := q.ToSql()
 	if err != nil {
@@ -459,14 +459,27 @@ func (s *DbRecorder) Update() error {
 
 // colList gets a list of column names. If withKeys is false, columns that are
 // designated as primary keys will not be returned in this list.
-func (s *DbRecorder) colList(withKeys bool) []string {
+// If omitNil is true, a column represented by pointer will be omitted if this
+// pointer is nil in current record
+func (s *DbRecorder) colList(withKeys bool, omitNil bool) []string {
 	names := make([]string, 0, len(s.fields))
 
-	for _, f := range s.fields {
-		if !withKeys && f.isKey {
+	var ar reflect.Value
+	if omitNil {
+		ar = reflect.Indirect(reflect.ValueOf(s.record))
+	}
+
+	for _, field := range s.fields {
+		if !withKeys && field.isKey {
 			continue
 		}
-		names = append(names, f.column)
+		if omitNil {
+			f := ar.FieldByName(field.name)
+			if f.Kind() == reflect.Ptr && f.IsNil() {
+				continue
+			}
+		}
+		names = append(names, field.column)
 	}
 
 	return names
@@ -476,20 +489,25 @@ func (s *DbRecorder) fieldReferences(withKeys bool) []interface{} {
 	refs := make([]interface{}, 0, len(s.fields))
 
 	ar := reflect.Indirect(reflect.ValueOf(s.record))
-	for _, f := range s.fields {
-		if !withKeys && f.isKey {
+	for _, field := range s.fields {
+		if !withKeys && field.isKey {
 			continue
 		}
 
-		ref := reflect.Indirect(ar.FieldByName(f.name))
-		//ref := ar.FieldByName(f.name)
-		if ref.IsValid() {
-			refs = append(refs, ref.Addr().Interface())
-		} else { // Should never hit this part.
-			var skip interface{}
-			refs = append(refs, &skip)
+		fv := ar.FieldByName(field.name)
+		var ref reflect.Value
+		if fv.Kind() != reflect.Ptr {
+			// we want the address of field
+			ref = fv.Addr()
+		} else {
+			// we already have an address
+			ref = fv
+			if fv.IsNil() {
+				// allocate a new element of same type
+				fv.Set(reflect.New(fv.Type().Elem()))
+			}
 		}
-
+		refs = append(refs, ref.Interface())
 	}
 
 	return refs
@@ -505,9 +523,19 @@ func (s *DbRecorder) insertFields() (columns []string, values []interface{}) {
 			continue
 		}
 
+		f := ar.FieldByName(field.name)
+		var v interface{}
 		// Get the value of the field we are going to store.
-		//v := reflect.Indirect(reflect.ValueOf(ar.FieldByName(field.name))).Interface()
-		v := ar.FieldByName(field.name).Interface()
+		if f.Kind() == reflect.Ptr {
+			if f.IsNil() {
+				// nothing to store
+				continue
+			}
+			// get the value pointed to by the field
+			v = f.Interface()
+		} else {
+			v = reflect.Indirect(f).Interface()
+		}
 
 		columns = append(columns, field.column)
 		values = append(values, v)
@@ -518,6 +546,7 @@ func (s *DbRecorder) insertFields() (columns []string, values []interface{}) {
 
 // updateFields produces fields to go into SetMap for an update.
 // This will NOT update PRIMARY_KEY fields.
+// Nil pointers are NOT returned
 func (s *DbRecorder) updateFields() map[string]interface{} {
 	ar := reflect.Indirect(reflect.ValueOf(s.record))
 	update := make(map[string]interface{}, ar.NumField())
@@ -526,7 +555,14 @@ func (s *DbRecorder) updateFields() map[string]interface{} {
 		if field.isKey {
 			continue
 		}
-		update[field.column] = ar.FieldByName(field.name).Interface()
+
+		f := ar.FieldByName(field.name)
+		if f.Kind() == reflect.Ptr {
+			if f.IsNil() {
+				continue
+			}
+		}
+		update[field.column] = reflect.Indirect(f).Interface()
 	}
 
 	return update
