@@ -395,7 +395,9 @@ func (s *DbRecorder) Insert() error {
 
 // Insert and assume that LastInsertId() returns something.
 func (s *DbRecorder) insertStd() error {
-	cols, vals := s.insertFields()
+
+	cols, vals := s.colValLists(true, false)
+
 	q := s.builder.Insert(s.table).Columns(cols...).Values(vals...)
 
 	ret, err := q.Exec()
@@ -427,9 +429,10 @@ func (s *DbRecorder) insertStd() error {
 // this actually refreshes ALL of the fields on the Record object. We do this
 // because it is trivially easy in Postgres.
 func (s *DbRecorder) insertPg() error {
-	cols, vals := s.insertFields()
 
+	cols, vals := s.colValLists(true, false)
 	dest := s.fieldReferences(true)
+
 	q := s.builder.Insert(s.table).Columns(cols...).Values(vals...).
 		Suffix("RETURNING " + strings.Join(s.colList(true, false), ","))
 
@@ -450,10 +453,16 @@ func (s *DbRecorder) insertPg() error {
 func (s *DbRecorder) Update() error {
 
 	whereParts := s.whereIds()
-	updates := s.updateFields()
-	q := s.builder.Update(s.table).SetMap(updates).Where(whereParts)
 
-	_, err := q.Exec()
+	cols, vals := s.colValLists(false, true)
+
+	q := s.builder.Update(s.table)
+	for i := range cols {
+		fmt.Printf("update, i: %+v|%T\n", i, i)
+		q = q.Set(cols[i], vals[i])
+	}
+
+	_, err := q.Where(whereParts).Exec()
 	return err
 }
 
@@ -513,59 +522,42 @@ func (s *DbRecorder) fieldReferences(withKeys bool) []interface{} {
 	return refs
 }
 
-func (s *DbRecorder) insertFields() (columns []string, values []interface{}) {
+// colValLists returns 2 lists, the column names and values.
+// If withKeys is false, columns and values of fields designated as primary keys
+// will not be included in those lists. Also, if withAutos is false, the returned
+// lists will not include fields designated as auto-increment.
+func (s *DbRecorder) colValLists(withKeys, withAutos bool) (columns []string, values []interface{}) {
 	ar := reflect.Indirect(reflect.ValueOf(s.record))
 
 	for _, field := range s.fields {
-		// Serial fields are automatically set, so we don't everride, lest
-		// we an invalid/duplicate key value.
-		if field.isAuto {
+
+		switch {
+		case !withKeys && field.isKey:
+			continue
+		case !withAutos && field.isAuto:
 			continue
 		}
 
-		f := ar.FieldByName(field.name)
-		var v interface{}
 		// Get the value of the field we are going to store.
+		f := ar.FieldByName(field.name)
+		var v reflect.Value
 		if f.Kind() == reflect.Ptr {
 			if f.IsNil() {
 				// nothing to store
 				continue
 			}
-			// get the value pointed to by the field
-			v = f.Interface()
+			// no indirection: the field is already a reference to its value
+			v = f
 		} else {
-			v = reflect.Indirect(f).Interface()
+			// get the value pointed to by the field
+			v = reflect.Indirect(f)
 		}
 
+		values = append(values, v.Interface())
 		columns = append(columns, field.column)
-		values = append(values, v)
 	}
 
 	return
-}
-
-// updateFields produces fields to go into SetMap for an update.
-// This will NOT update PRIMARY_KEY fields.
-// Nil pointers are NOT returned
-func (s *DbRecorder) updateFields() map[string]interface{} {
-	ar := reflect.Indirect(reflect.ValueOf(s.record))
-	update := make(map[string]interface{}, ar.NumField())
-
-	for _, field := range s.fields {
-		if field.isKey {
-			continue
-		}
-
-		f := ar.FieldByName(field.name)
-		if f.Kind() == reflect.Ptr {
-			if f.IsNil() {
-				continue
-			}
-		}
-		update[field.column] = reflect.Indirect(f).Interface()
-	}
-
-	return update
 }
 
 // whereIds gets a list of names and a list of values for all columns marked as primary
@@ -577,7 +569,6 @@ func (s *DbRecorder) whereIds() map[string]interface{} {
 
 	for _, f := range s.key {
 		clause[f.column] = ar.FieldByName(f.name).Interface()
-		//fmt.Printf("Where parts: %V", clause[f.column])
 	}
 
 	return clause
