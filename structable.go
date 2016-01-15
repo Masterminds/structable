@@ -494,6 +494,9 @@ func (s *DbRecorder) colList(withKeys bool, omitNil bool) []string {
 	return names
 }
 
+// fieldReferences gets a list of references to the record values, so that the
+// caller can modify them. If withKeys is false, columns that are designated as
+// primary keys will not be returned in this list.
 func (s *DbRecorder) fieldReferences(withKeys bool) []interface{} {
 	refs := make([]interface{}, 0, len(s.fields))
 
