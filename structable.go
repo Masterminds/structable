@@ -318,7 +318,7 @@ func (s *DbRecorder) Load() error {
 	whereParts := s.whereIds()
 	dest := s.fieldReferences(false)
 
-	q := s.builder.Select(s.colList(false)...).From(s.table).Where(whereParts)
+	q := s.builder.Select(s.colList(false, false)...).From(s.table).Where(whereParts)
 	err := q.QueryRow().Scan(dest...)
 
 	return err
@@ -332,12 +332,12 @@ func (s *DbRecorder) Load() error {
 // 		return s.LoadWhere("uuid = ?", uuid)
 // 	}
 //
-// This functions similarly to Load, but with the notable differance that
+// This functions similarly to Load, but with the notable difference that
 // it loads the entire object (it does not skip keys used to do the lookup).
 func (s *DbRecorder) LoadWhere(pred interface{}, args ...interface{}) error {
 	dest := s.fieldReferences(true)
 
-	q := s.builder.Select(s.colList(true)...).From(s.table).Where(pred, args...)
+	q := s.builder.Select(s.colList(true, true)...).From(s.table).Where(pred, args...)
 	err := q.QueryRow().Scan(dest...)
 
 	return err
@@ -357,6 +357,10 @@ func (s *DbRecorder) Exists() (bool, error) {
 	return has, err
 }
 
+// ExistsWhere returns `true` if and only if there is at least one record that matches one (or multiple) conditions.
+//
+// Conditions are expressed in the form of predicates and expected values
+// that together build a WHERE clause. See Squirrel's Where(pred, args)
 func (s *DbRecorder) ExistsWhere(pred interface{}, args ...interface{}) (bool, error) {
 	has := false
 
@@ -391,7 +395,9 @@ func (s *DbRecorder) Insert() error {
 
 // Insert and assume that LastInsertId() returns something.
 func (s *DbRecorder) insertStd() error {
-	cols, vals := s.insertFields()
+
+	cols, vals := s.colValLists(true, false)
+
 	q := s.builder.Insert(s.table).Columns(cols...).Values(vals...)
 
 	ret, err := q.Exec()
@@ -423,11 +429,12 @@ func (s *DbRecorder) insertStd() error {
 // this actually refreshes ALL of the fields on the Record object. We do this
 // because it is trivially easy in Postgres.
 func (s *DbRecorder) insertPg() error {
-	cols, vals := s.insertFields()
 
+	cols, vals := s.colValLists(true, false)
 	dest := s.fieldReferences(true)
+
 	q := s.builder.Insert(s.table).Columns(cols...).Values(vals...).
-		Suffix("RETURNING " + strings.Join(s.colList(true), ","))
+		Suffix("RETURNING " + strings.Join(s.colList(true, false), ","))
 
 	sql, vals, err := q.ToSql()
 	if err != nil {
@@ -446,86 +453,114 @@ func (s *DbRecorder) insertPg() error {
 func (s *DbRecorder) Update() error {
 
 	whereParts := s.whereIds()
-	updates := s.updateFields()
-	q := s.builder.Update(s.table).SetMap(updates).Where(whereParts)
 
-	_, err := q.Exec()
+	cols, vals := s.colValLists(false, true)
+
+	q := s.builder.Update(s.table)
+	for i := range cols {
+		fmt.Printf("update, i: %+v|%T\n", i, i)
+		q = q.Set(cols[i], vals[i])
+	}
+
+	_, err := q.Where(whereParts).Exec()
 	return err
 }
 
 // colList gets a list of column names. If withKeys is false, columns that are
 // designated as primary keys will not be returned in this list.
-func (s *DbRecorder) colList(withKeys bool) []string {
+// If omitNil is true, a column represented by pointer will be omitted if this
+// pointer is nil in current record
+func (s *DbRecorder) colList(withKeys bool, omitNil bool) []string {
 	names := make([]string, 0, len(s.fields))
 
-	for _, f := range s.fields {
-		if !withKeys && f.isKey {
+	var ar reflect.Value
+	if omitNil {
+		ar = reflect.Indirect(reflect.ValueOf(s.record))
+	}
+
+	for _, field := range s.fields {
+		if !withKeys && field.isKey {
 			continue
 		}
-		names = append(names, f.column)
+		if omitNil {
+			f := ar.FieldByName(field.name)
+			if f.Kind() == reflect.Ptr && f.IsNil() {
+				continue
+			}
+		}
+		names = append(names, field.column)
 	}
 
 	return names
 }
 
+// fieldReferences gets a list of references to the record values, so that the
+// caller can modify them. If withKeys is false, columns that are designated as
+// primary keys will not be returned in this list.
 func (s *DbRecorder) fieldReferences(withKeys bool) []interface{} {
 	refs := make([]interface{}, 0, len(s.fields))
 
 	ar := reflect.Indirect(reflect.ValueOf(s.record))
-	for _, f := range s.fields {
-		if !withKeys && f.isKey {
+	for _, field := range s.fields {
+		if !withKeys && field.isKey {
 			continue
 		}
 
-		ref := reflect.Indirect(ar.FieldByName(f.name))
-		//ref := ar.FieldByName(f.name)
-		if ref.IsValid() {
-			refs = append(refs, ref.Addr().Interface())
-		} else { // Should never hit this part.
-			var skip interface{}
-			refs = append(refs, &skip)
+		fv := ar.FieldByName(field.name)
+		var ref reflect.Value
+		if fv.Kind() != reflect.Ptr {
+			// we want the address of field
+			ref = fv.Addr()
+		} else {
+			// we already have an address
+			ref = fv
+			if fv.IsNil() {
+				// allocate a new element of same type
+				fv.Set(reflect.New(fv.Type().Elem()))
+			}
 		}
-
+		refs = append(refs, ref.Interface())
 	}
 
 	return refs
 }
 
-func (s *DbRecorder) insertFields() (columns []string, values []interface{}) {
+// colValLists returns 2 lists, the column names and values.
+// If withKeys is false, columns and values of fields designated as primary keys
+// will not be included in those lists. Also, if withAutos is false, the returned
+// lists will not include fields designated as auto-increment.
+func (s *DbRecorder) colValLists(withKeys, withAutos bool) (columns []string, values []interface{}) {
 	ar := reflect.Indirect(reflect.ValueOf(s.record))
 
 	for _, field := range s.fields {
-		// Serial fields are automatically set, so we don't everride, lest
-		// we an invalid/duplicate key value.
-		if field.isAuto {
+
+		switch {
+		case !withKeys && field.isKey:
+			continue
+		case !withAutos && field.isAuto:
 			continue
 		}
 
 		// Get the value of the field we are going to store.
-		//v := reflect.Indirect(reflect.ValueOf(ar.FieldByName(field.name))).Interface()
-		v := ar.FieldByName(field.name).Interface()
+		f := ar.FieldByName(field.name)
+		var v reflect.Value
+		if f.Kind() == reflect.Ptr {
+			if f.IsNil() {
+				// nothing to store
+				continue
+			}
+			// no indirection: the field is already a reference to its value
+			v = f
+		} else {
+			// get the value pointed to by the field
+			v = reflect.Indirect(f)
+		}
 
+		values = append(values, v.Interface())
 		columns = append(columns, field.column)
-		values = append(values, v)
 	}
 
 	return
-}
-
-// updateFields produces fields to go into SetMap for an update.
-// This will NOT update PRIMARY_KEY fields.
-func (s *DbRecorder) updateFields() map[string]interface{} {
-	ar := reflect.Indirect(reflect.ValueOf(s.record))
-	update := make(map[string]interface{}, ar.NumField())
-
-	for _, field := range s.fields {
-		if field.isKey {
-			continue
-		}
-		update[field.column] = ar.FieldByName(field.name).Interface()
-	}
-
-	return update
 }
 
 // whereIds gets a list of names and a list of values for all columns marked as primary
@@ -537,7 +572,6 @@ func (s *DbRecorder) whereIds() map[string]interface{} {
 
 	for _, f := range s.key {
 		clause[f.column] = ar.FieldByName(f.name).Interface()
-		//fmt.Printf("Where parts: %V", clause[f.column])
 	}
 
 	return clause

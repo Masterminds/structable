@@ -11,11 +11,12 @@ import (
 )
 
 type Stool struct {
-	Id       int    `stbl:"id,PRIMARY_KEY,AUTO_INCREMENT"`
-	Id2      int    `stbl:"id_two,    PRIMARY_KEY      "`
-	Legs     int    `stbl:"number_of_legs"`
-	Material string `stbl:"material"`
-	Ignored  string // will not be stored.
+	Id       int     `stbl:"id,PRIMARY_KEY,AUTO_INCREMENT"`
+	Id2      int     `stbl:"id_two,    PRIMARY_KEY      "`
+	Legs     int     `stbl:"number_of_legs"`
+	Material string  `stbl:"material"`
+	Color    *string `stbl:"color"`
+	Ignored  string  // will not be stored.
 }
 
 func newStool() *Stool {
@@ -61,8 +62,8 @@ func TestBind(t *testing.T) {
 		t.Errorf("Failed to get table name.")
 	}
 
-	if len(store.fields) != 4 {
-		t.Errorf("Expected 4 fields, got %d: %V", len(store.fields), store.fields)
+	if len(store.fields) != 5 {
+		t.Errorf("Expected 5 fields, got %d: %V", len(store.fields), store.fields)
 	}
 
 	keyCount := 0
@@ -92,7 +93,7 @@ func TestLoad(t *testing.T) {
 		t.Errorf("Error running query: %s", err)
 	}
 
-	expect := "SELECT number_of_legs, material FROM test_table WHERE id = ? AND id_two = ?"
+	expect := "SELECT number_of_legs, material, color FROM test_table WHERE id = ? AND id_two = ?"
 	if db.LastQueryRowSql != expect {
 		t.Errorf("Unexpected SQL: %s", db.LastQueryRowSql)
 	}
@@ -160,15 +161,10 @@ func TestUpdate(t *testing.T) {
 
 	rec := New(db, "mysql").Bind("test_table", stool)
 
+	// with nil pointer field
 	if err := rec.Update(); err != nil {
 		t.Errorf("Update error: %s", err)
 	}
-
-	/*
-		expect := "UPDATE test_table SET number_of_legs = ?, material = ? WHERE id = ? AND id_two = ?"
-		if db.LastExecSql != expect {
-			t.Errorf("Expected '%s', got '%s'", expect, db.LastExecSql)
-		}*/
 
 	if !strings.Contains(db.LastExecSql, "number_of_legs = ") {
 		t.Error("Expected 'number_of_legs' in query")
@@ -190,13 +186,40 @@ func TestUpdate(t *testing.T) {
 		if !found {
 			t.Errorf("Could not find %v in %v", exp, gotargs)
 		}
-		/*
-			if exp != gotargs[i] {
-				t.Errorf("Expected arg %v, got %v", exp, gotargs[i])
-			}
-		*/
 	}
 
+	// with allocated pointer
+	blue := "Blue"
+	stool.Color = &blue
+
+	if err := rec.Update(); err != nil {
+		t.Errorf("Update error: %s", err)
+	}
+
+	if !strings.Contains(db.LastExecSql, "number_of_legs = ") {
+		t.Error("Expected 'number_of_legs' in query")
+	}
+	if !strings.Contains(db.LastExecSql, "material = ") {
+		t.Error("Expected 'material' in query")
+	}
+	if !strings.Contains(db.LastExecSql, "color = ") {
+		t.Error("Expected 'color' in query")
+	}
+
+	eargs = []interface{}{3, "Stainless Steel", &blue, 1, 2}
+	gotargs = db.LastExecArgs
+	for _, exp := range eargs {
+		found := false
+		for _, arg := range gotargs {
+			if arg == exp {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Could not find %v in %v", exp, gotargs)
+		}
+	}
 }
 
 func TestDelete(t *testing.T) {
