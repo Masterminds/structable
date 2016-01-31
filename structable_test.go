@@ -63,7 +63,7 @@ func TestBind(t *testing.T) {
 	}
 
 	if len(store.fields) != 5 {
-		t.Errorf("Expected 5 fields, got %d: %V", len(store.fields), store.fields)
+		t.Errorf("Expected 5 fields, got %d: %+v", len(store.fields), store.fields)
 	}
 
 	keyCount := 0
@@ -102,7 +102,7 @@ func TestLoad(t *testing.T) {
 	got := db.LastQueryRowArgs
 	for i, exp := range expectargs {
 		if exp != got[i] {
-			t.Errorf("Surprise! %v doesn't equal %v")
+			t.Errorf("Surprise! %v doesn't equal %v", exp, got[i])
 		}
 	}
 }
