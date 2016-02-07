@@ -458,7 +458,6 @@ func (s *DbRecorder) Update() error {
 
 	q := s.builder.Update(s.table)
 	for i := range cols {
-		fmt.Printf("update, i: %+v|%T\n", i, i)
 		q = q.Set(cols[i], vals[i])
 	}
 
