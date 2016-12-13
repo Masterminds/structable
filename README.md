@@ -1,7 +1,7 @@
 # Structable: Struct-Table Mapping for Go
 
-**Warning:** Structable 3.0.0 has new interfaces, and is incompatible
-with older versions of Structable.
+**Warning:** This is the Structable 4 development branch. For a stable
+release, use version 3.1.0.
 
 This library provides basic struct-to-table mapping for Go.
 
