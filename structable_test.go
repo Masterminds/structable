@@ -251,8 +251,8 @@ func TestDelete(t *testing.T) {
 	if ok, _ := regexp.MatchString(expect, db.LastExecSql); !ok {
 		t.Errorf("Unexpect query: %s", db.LastExecSql)
 	}
-	if db.LastExecArgs[0].(int) != 1 {
-		t.Errorf("Expected 1")
+	if got := db.LastExecArgs[0].(int); got != 1 {
+		t.Errorf("Expected 1, got %d", got)
 	}
 }
 

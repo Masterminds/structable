@@ -233,7 +233,7 @@ type Saver interface {
 	Delete() error
 }
 
-// Haecceity implements John Duns Scotus.
+// Haecceity indicates whether a thing exists.
 //
 // Actually, it is responsible for testing whether a thing exists, and is
 // what we think it is.
@@ -331,15 +331,22 @@ func (d *DbRecorder) Init(db squirrel.DBProxyBeginner, flavor string) {
 	d.flavor = flavor
 }
 
+// TableName returns the table name of this recorder.
 func (s *DbRecorder) TableName() string {
 	return s.table
 }
+
+// DB returns the database (DBProxyBeginner) for this recorder.
 func (s *DbRecorder) DB() squirrel.DBProxyBeginner {
 	return s.db
 }
+
+// Builder returns the statement builder for this recorder.
 func (s *DbRecorder) Builder() *squirrel.StatementBuilderType {
 	return s.builder
 }
+
+// Driver returns the string name of the driver.
 func (s *DbRecorder) Driver() string {
 	return s.flavor
 }
@@ -427,10 +434,16 @@ func (s *DbRecorder) Exists() (bool, error) {
 	return has, err
 }
 
+<<<<<<< HEAD
 // ExistsWhere returns `true` if and only if there is at least one record that matches one (or multiple) conditions.
 //
 // Conditions are expressed in the form of predicates and expected values
 // that together build a WHERE clause. See Squirrel's Where(pred, args)
+=======
+// ExistsWhere returns true if at least one row exists in the table with the given WHERE clause.
+//
+// It returns an error if the query cannot be executed.
+>>>>>>> Update documentation
 func (s *DbRecorder) ExistsWhere(pred interface{}, args ...interface{}) (bool, error) {
 	has := false
 
