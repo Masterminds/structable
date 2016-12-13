@@ -48,12 +48,13 @@ type {{.StructName}} struct {
 	structable.Recorder
 	builder squirrel.StatementBuilderType
 	{{range .Fields}}{{.}}
-	{{end}}
+	{{end}}db squirrel.DBProxyBeginner
+	flavor string
 }
 
 // New{{.StructName}} creates a new {{.StructName}} wired to structable.
 func New{{.StructName}}(db squirrel.DBProxyBeginner, flavor string) *{{.StructName}} {
-	o := new({{.StructName}})
+	o := &{{.StructName}}{db: db, flavor: flavor}
 	o.Recorder = structable.New(db, flavor).Bind("{{.TableName}}", o)
 	return o
 }
