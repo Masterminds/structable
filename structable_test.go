@@ -129,6 +129,22 @@ func TestLoadWhere(t *testing.T) {
 	}
 
 }
+func TestList(t *testing.T) {
+	stool := newStool()
+	db := &DBStub{}
+	//db, builder := squirrelFixture()
+
+	r := New(db, "mysql").Bind("test_table", stool)
+
+	if _, err := List(r.(Describer), 10, 0); err != nil {
+		t.Errorf("Error running query: %s", err)
+	}
+
+	expect := "SELECT number_of_legs, material, color FROM test_table LIMIT 10 OFFSET 0"
+	if db.LastQuerySql != expect {
+		t.Errorf("Unexpected SQL: %q\nGot %q", expect, db.LastQuerySql)
+	}
+}
 
 func TestInsert(t *testing.T) {
 	stool := newStool()
@@ -235,8 +251,8 @@ func TestDelete(t *testing.T) {
 	if ok, _ := regexp.MatchString(expect, db.LastExecSql); !ok {
 		t.Errorf("Unexpect query: %s", db.LastExecSql)
 	}
-	if db.LastExecArgs[0].(int) != 1 {
-		t.Errorf("Expected 1")
+	if got := db.LastExecArgs[0].(int); got != 1 {
+		t.Errorf("Expected 1, got %d", got)
 	}
 }
 
@@ -252,7 +268,7 @@ func TestExists(t *testing.T) {
 
 	expect := "SELECT COUNT(*) > 0 FROM test_table WHERE id = ? AND id_two = ?"
 	if db.LastQueryRowSql != expect {
-		t.Errorf("Unexpected SQL: %s", db.LastQueryRowSql)
+		t.Errorf("Unexpected SQL: expected %q, got %q", expect, db.LastQueryRowSql)
 	}
 }
 

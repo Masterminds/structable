@@ -144,9 +144,10 @@ package structable
 
 import (
 	"fmt"
-	"github.com/Masterminds/squirrel"
 	"reflect"
 	"strings"
+
+	"github.com/Masterminds/squirrel"
 )
 
 // 'stbl' is the main tag used for annotating Structable Records.
@@ -199,6 +200,7 @@ type Recorder interface {
 	Loader
 	Haecceity
 	Saver
+	Describer
 
 	// This returns the column names used for the primary key.
 	//Key() []string
@@ -231,7 +233,7 @@ type Saver interface {
 	Delete() error
 }
 
-// Haecceity implements John Duns Scotus.
+// Haecceity indicates whether a thing exists.
 //
 // Actually, it is responsible for testing whether a thing exists, and is
 // what we think it is.
@@ -243,6 +245,57 @@ type Haecceity interface {
 	// It takes a WHERE clause, and it needs to gaurantee that at least one
 	// record matches. It need not assure that *only* one item exists.
 	ExistsWhere(interface{}, ...interface{}) (bool, error)
+}
+
+// Describer is a structable object that can describe its table structure.
+type Describer interface {
+	// Columns gets the columns on this table.
+	Columns(bool) []string
+	// FieldReferences gets references to the fields on this object.
+	FieldReferences(bool) []interface{}
+	// WhereIds returns a map of ID fields to (current) ID values.
+	//
+	// This is useful to quickly generate where clauses.
+	WhereIds() map[string]interface{}
+
+	// TableName returns the table name.
+	TableName() string
+	// Builder returns the builder
+	Builder() *squirrel.StatementBuilderType
+	// DB returns a DB-like handle.
+	DB() squirrel.DBProxyBeginner
+
+	Driver() string
+
+	Init(d squirrel.DBProxyBeginner, flavor string)
+}
+
+// List returns a list of objects of the given kind.
+//
+// This runs a Select of the given kind, and returns the results.
+func List(d Describer, limit, offset uint64) ([]Describer, error) {
+	var tn string = d.TableName()
+	var cols []string = d.Columns(false)
+	q := d.Builder().Select(cols...).From(tn).Limit(limit).Offset(offset)
+	rows, err := q.Query()
+	if err != nil || rows == nil {
+		return []Describer{}, err
+	}
+
+	v := reflect.Indirect(reflect.ValueOf(d))
+	t := v.Type()
+
+	buf := []Describer{}
+	for rows.Next() {
+		nv := reflect.New(t)
+		s := nv.Interface().(Describer)
+		s.Init(d.DB(), d.Driver())
+		dest := s.FieldReferences(false)
+		rows.Scan(dest...)
+		buf = append(buf, s)
+	}
+
+	return buf, rows.Err()
 }
 
 // Implements the Recorder interface, and stores data in a DB.
@@ -261,17 +314,41 @@ type DbRecorder struct {
 // (The squirrel.DBProxy interface defines the functions normal for a database connection
 // or a prepared statement cache.)
 func New(db squirrel.DBProxyBeginner, flavor string) *DbRecorder {
-	b := squirrel.StatementBuilder.RunWith(db)
-	r := new(DbRecorder)
-	r.builder = &b
-	r.db = db
-	r.flavor = flavor
+	d := new(DbRecorder)
+	d.Init(db, flavor)
+	return d
+}
 
+// Init initializes a DbRecorder
+func (d *DbRecorder) Init(db squirrel.DBProxyBeginner, flavor string) {
+	b := squirrel.StatementBuilder.RunWith(db)
 	if flavor == "postgres" {
 		b = b.PlaceholderFormat(squirrel.Dollar)
 	}
 
-	return r
+	d.builder = &b
+	d.db = db
+	d.flavor = flavor
+}
+
+// TableName returns the table name of this recorder.
+func (s *DbRecorder) TableName() string {
+	return s.table
+}
+
+// DB returns the database (DBProxyBeginner) for this recorder.
+func (s *DbRecorder) DB() squirrel.DBProxyBeginner {
+	return s.db
+}
+
+// Builder returns the statement builder for this recorder.
+func (s *DbRecorder) Builder() *squirrel.StatementBuilderType {
+	return s.builder
+}
+
+// Driver returns the string name of the driver.
+func (s *DbRecorder) Driver() string {
+	return s.flavor
 }
 
 // Bind binds a DbRecorder to a Record.
@@ -315,8 +392,8 @@ func (s *DbRecorder) Key() []string {
 // This modifies the Record in-place. Other than the primary key fields, any
 // other field will be overwritten by the value retrieved from the database.
 func (s *DbRecorder) Load() error {
-	whereParts := s.whereIds()
-	dest := s.fieldReferences(false)
+	whereParts := s.WhereIds()
+	dest := s.FieldReferences(false)
 
 	q := s.builder.Select(s.colList(false, false)...).From(s.table).Where(whereParts)
 	err := q.QueryRow().Scan(dest...)
@@ -335,7 +412,7 @@ func (s *DbRecorder) Load() error {
 // This functions similarly to Load, but with the notable difference that
 // it loads the entire object (it does not skip keys used to do the lookup).
 func (s *DbRecorder) LoadWhere(pred interface{}, args ...interface{}) error {
-	dest := s.fieldReferences(true)
+	dest := s.FieldReferences(true)
 
 	q := s.builder.Select(s.colList(true, true)...).From(s.table).Where(pred, args...)
 	err := q.QueryRow().Scan(dest...)
@@ -349,7 +426,7 @@ func (s *DbRecorder) LoadWhere(pred interface{}, args ...interface{}) error {
 // value).
 func (s *DbRecorder) Exists() (bool, error) {
 	has := false
-	whereParts := s.whereIds()
+	whereParts := s.WhereIds()
 
 	q := s.builder.Select("COUNT(*) > 0").From(s.table).Where(whereParts)
 	err := q.QueryRow().Scan(&has)
@@ -374,7 +451,7 @@ func (s *DbRecorder) ExistsWhere(pred interface{}, args ...interface{}) (bool, e
 //
 // The fields on the present record will remain set, but not saved in the database.
 func (s *DbRecorder) Delete() error {
-	wheres := s.whereIds()
+	wheres := s.WhereIds()
 	q := s.builder.Delete(s.table).Where(wheres)
 	_, err := q.Exec()
 	return err
@@ -429,10 +506,8 @@ func (s *DbRecorder) insertStd() error {
 // this actually refreshes ALL of the fields on the Record object. We do this
 // because it is trivially easy in Postgres.
 func (s *DbRecorder) insertPg() error {
-
 	cols, vals := s.colValLists(true, false)
-	dest := s.fieldReferences(true)
-
+	dest := s.FieldReferences(true)
 	q := s.builder.Insert(s.table).Columns(cols...).Values(vals...).
 		Suffix("RETURNING " + strings.Join(s.colList(true, false), ","))
 
@@ -451,18 +526,19 @@ func (s *DbRecorder) insertPg() error {
 //
 // If no entry is found, update will NOT create (INSERT) a new record.
 func (s *DbRecorder) Update() error {
-
-	whereParts := s.whereIds()
-
-	cols, vals := s.colValLists(false, true)
-
-	q := s.builder.Update(s.table)
-	for i := range cols {
-		q = q.Set(cols[i], vals[i])
-	}
-
-	_, err := q.Where(whereParts).Exec()
+	whereParts := s.WhereIds()
+	updates := s.updateFields()
+	q := s.builder.Update(s.table).SetMap(updates).Where(whereParts)
+	_, err := q.Exec()
 	return err
+}
+
+// Columns returns the names of the columns on this table.
+//
+// If includeKeys is false, the columns that are marked as keys are omitted
+// from the returned list.
+func (s *DbRecorder) Columns(includeKeys bool) []string {
+	return s.colList(includeKeys, false)
 }
 
 // colList gets a list of column names. If withKeys is false, columns that are
@@ -493,10 +569,14 @@ func (s *DbRecorder) colList(withKeys bool, omitNil bool) []string {
 	return names
 }
 
-// fieldReferences gets a list of references to the record values, so that the
-// caller can modify them. If withKeys is false, columns that are designated as
-// primary keys will not be returned in this list.
-func (s *DbRecorder) fieldReferences(withKeys bool) []interface{} {
+// FieldReferences returns a list of references to fields on this object.
+//
+// This is used for processing SQL results:
+//
+//	dest := s.FieldReferences(false)
+//	q := s.builder.Select(s.Columns(false)...).From(s.table)
+//	err := q.QueryRow().Scan(dest...)
+func (s *DbRecorder) FieldReferences(withKeys bool) []interface{} {
 	refs := make([]interface{}, 0, len(s.fields))
 
 	ar := reflect.Indirect(reflect.ValueOf(s.record))
@@ -562,9 +642,20 @@ func (s *DbRecorder) colValLists(withKeys, withAutos bool) (columns []string, va
 	return
 }
 
-// whereIds gets a list of names and a list of values for all columns marked as primary
+// updateFields produces fields to go into SetMap for an update.
+// This will NOT update PRIMARY_KEY fields.
+func (s *DbRecorder) updateFields() map[string]interface{} {
+	update := map[string]interface{}{}
+	cols, vals := s.colValLists(false, true)
+	for i, col := range cols {
+		update[col] = vals[i]
+	}
+	return update
+}
+
+// WhereIds gets a list of names and a list of values for all columns marked as primary
 // keys.
-func (s *DbRecorder) whereIds() map[string]interface{} {
+func (s *DbRecorder) WhereIds() map[string]interface{} {
 	clause := make(map[string]interface{}, len(s.key))
 
 	ar := reflect.Indirect(reflect.ValueOf(s.record))

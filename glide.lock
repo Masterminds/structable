@@ -1,0 +1,18 @@
+hash: 33914218da2ad50586a54a84aa0f1d94be0f335ca84e9e8ae2ef7719818a3d02
+updated: 2017-01-03T22:16:30.285599458-07:00
+imports:
+- name: github.com/codegangsta/cli
+  version: 0bdeddeeb0f650497d603c4ad7b20cfe685682f6
+- name: github.com/lann/builder
+  version: f22ce00fd9394014049dad11c244859432bd6820
+- name: github.com/lann/ps
+  version: 62de8c46ede02a7675c4c79c84883eb164cb71e3
+- name: github.com/lib/pq
+  version: 8df6253d1317616f36b0c3740eb30c239a7372cb
+  subpackages:
+  - oid
+- name: github.com/Masterminds/squirrel
+  version: 20f192218cf52a73397fa2df45bdda720f3e47c8
+- name: github.com/mattn/go-sqlite3
+  version: 6f2749a3ca9b233ffb8749ef9684f7f4d88cee7a
+devImports: []
