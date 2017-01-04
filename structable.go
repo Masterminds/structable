@@ -434,16 +434,10 @@ func (s *DbRecorder) Exists() (bool, error) {
 	return has, err
 }
 
-<<<<<<< HEAD
 // ExistsWhere returns `true` if and only if there is at least one record that matches one (or multiple) conditions.
 //
 // Conditions are expressed in the form of predicates and expected values
 // that together build a WHERE clause. See Squirrel's Where(pred, args)
-=======
-// ExistsWhere returns true if at least one row exists in the table with the given WHERE clause.
-//
-// It returns an error if the query cannot be executed.
->>>>>>> Update documentation
 func (s *DbRecorder) ExistsWhere(pred interface{}, args ...interface{}) (bool, error) {
 	has := false
 
@@ -544,7 +538,7 @@ func (s *DbRecorder) Update() error {
 // If includeKeys is false, the columns that are marked as keys are omitted
 // from the returned list.
 func (s *DbRecorder) Columns(includeKeys bool) []string {
-	return s.colList(includeKeys)
+	return s.colList(includeKeys, false)
 }
 
 // colList gets a list of column names. If withKeys is false, columns that are
@@ -651,16 +645,11 @@ func (s *DbRecorder) colValLists(withKeys, withAutos bool) (columns []string, va
 // updateFields produces fields to go into SetMap for an update.
 // This will NOT update PRIMARY_KEY fields.
 func (s *DbRecorder) updateFields() map[string]interface{} {
-	ar := reflect.Indirect(reflect.ValueOf(s.record))
-	update := make(map[string]interface{}, ar.NumField())
-
-	for _, field := range s.fields {
-		if field.isKey {
-			continue
-		}
-		update[field.column] = ar.FieldByName(field.name).Interface()
+	update := map[string]interface{}{}
+	cols, vals := s.colValLists(false, true)
+	for i, col := range cols {
+		update[col] = vals[i]
 	}
-
 	return update
 }
 

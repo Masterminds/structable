@@ -140,7 +140,7 @@ func TestList(t *testing.T) {
 		t.Errorf("Error running query: %s", err)
 	}
 
-	expect := "SELECT number_of_legs, material FROM test_table LIMIT 10 OFFSET 0"
+	expect := "SELECT number_of_legs, material, color FROM test_table LIMIT 10 OFFSET 0"
 	if db.LastQuerySql != expect {
 		t.Errorf("Unexpected SQL: %q\nGot %q", expect, db.LastQuerySql)
 	}
@@ -268,7 +268,7 @@ func TestExists(t *testing.T) {
 
 	expect := "SELECT COUNT(*) > 0 FROM test_table WHERE id = ? AND id_two = ?"
 	if db.LastQueryRowSql != expect {
-		t.Errorf("Unexpected SQL: %s", db.LastQueryRowSql)
+		t.Errorf("Unexpected SQL: expected %q, got %q", expect, db.LastQueryRowSql)
 	}
 }
 
