@@ -274,18 +274,73 @@ type Describer interface {
 //
 // This runs a Select of the given kind, and returns the results.
 func List(d Describer, limit, offset uint64) ([]Describer, error) {
+	fn := func(desc Describer, query squirrel.SelectBuilder) (squirrel.SelectBuilder, error) {
+		return query.Limit(limit).Offset(offset), nil
+	}
+	return ListWhere(d, fn)
+	/*
+		var tn string = d.TableName()
+		var cols []string = d.Columns(false)
+		q := d.Builder().Select(cols...).From(tn).Limit(limit).Offset(offset)
+		rows, err := q.Query()
+		if err != nil || rows == nil {
+			return []Describer{}, err
+		}
+
+		v := reflect.Indirect(reflect.ValueOf(d))
+		t := v.Type()
+
+		buf := []Describer{}
+		for rows.Next() {
+			nv := reflect.New(t)
+			s := nv.Interface().(Describer)
+			s.Init(d.DB(), d.Driver())
+			dest := s.FieldReferences(false)
+			rows.Scan(dest...)
+			buf = append(buf, s)
+		}
+
+		return buf, rows.Err()
+	*/
+}
+
+// WhereFunc modifies a basic select operation to add conditions.
+//
+// Technically, conditions are not limited to adding where clauses. It will receive
+// a select statement with the 'SELECT ... FROM tablename' portion composed already.
+type WhereFunc func(desc Describer, query squirrel.SelectBuilder) (squirrel.SelectBuilder, error)
+
+// ListWhere takes a describer and a query modifying function and executes a query.
+//
+// The WhereFunc will be given a SELECT d.Colsumns() FROM d.TableName() statement,
+// and may modify it. Note that while joining is supported, changing the column
+// list will have unpredictable side effects. It is advised that joins be done
+// using Squirrel instead.
+//
+// This will return a list of Describer objects, where the underlying type
+// of each matches the underlying type of the passed-in 'd' Describer.
+func ListWhere(d Describer, fn WhereFunc) ([]Describer, error) {
 	var tn string = d.TableName()
 	var cols []string = d.Columns(false)
-	q := d.Builder().Select(cols...).From(tn).Limit(limit).Offset(offset)
+	buf := []Describer{}
+
+	// Base query
+	q := d.Builder().Select(cols...).From(tn)
+
+	// Allow the fn to modify our query
+	var err error
+	q, err = fn(d, q)
+	if err != nil {
+		return buf, err
+	}
+
 	rows, err := q.Query()
 	if err != nil || rows == nil {
-		return []Describer{}, err
+		return buf, err
 	}
 
 	v := reflect.Indirect(reflect.ValueOf(d))
 	t := v.Type()
-
-	buf := []Describer{}
 	for rows.Next() {
 		nv := reflect.New(t)
 		s := nv.Interface().(Describer)

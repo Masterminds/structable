@@ -84,10 +84,25 @@ The target use case for Structable is to use it as a backend for an
 Active Record pattern. An example of this can be found in the
 `structable_test.go` file
 
+Most of Structable focuses on individual objects, but there are helpers
+for listing objects:
+
+```go
+// Get a list of things that have the same type as object.
+items, err := structable.List(object, offset, limit)
+
+// Customize a list of things that have the same type as object.
+fn = func(object structable.Describer, sql squirrel.SelectBuilder) (squirrel.SelectBuilder, error) {
+  return sql.Limit(10), nil
+}
+items, err := structable.ListWhere(object, fn)
+```
+
 ### Tested On
 
 - MySQL (5.5)
 - PostgreSQL (9.3)
+- SQLite 3
 
 ## What It Does Not Do
 

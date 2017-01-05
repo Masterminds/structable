@@ -2,6 +2,7 @@ package structable
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -129,6 +130,7 @@ func TestLoadWhere(t *testing.T) {
 	}
 
 }
+
 func TestList(t *testing.T) {
 	stool := newStool()
 	db := &DBStub{}
@@ -143,6 +145,20 @@ func TestList(t *testing.T) {
 	expect := "SELECT number_of_legs, material, color FROM test_table LIMIT 10 OFFSET 0"
 	if db.LastQuerySql != expect {
 		t.Errorf("Unexpected SQL: %q\nGot %q", expect, db.LastQuerySql)
+	}
+}
+
+func TestListWhere_Error(t *testing.T) {
+	stool := newStool()
+	db := &DBStub{}
+	r := New(db, "mysql").Bind("test_table", stool)
+
+	fn := func(d Describer, q squirrel.SelectBuilder) (squirrel.SelectBuilder, error) {
+		return q, errors.New("intentional failure")
+	}
+
+	if _, err := ListWhere(r.(Describer), fn); err == nil {
+		t.Error("Expected failed WhereFunc to fail query")
 	}
 }
 
