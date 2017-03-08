@@ -338,6 +338,7 @@ func ListWhere(d Describer, fn WhereFunc) ([]Describer, error) {
 	if err != nil || rows == nil {
 		return buf, err
 	}
+	defer rows.Close()
 
 	v := reflect.Indirect(reflect.ValueOf(d))
 	t := v.Type()
