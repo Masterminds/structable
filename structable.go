@@ -197,6 +197,14 @@ type Recorder interface {
 	// details about each field.
 	Bind(string, Record) Recorder
 
+	// Interface provides a way of fetching the record from the Recorder.
+	//
+	// A record is bound to a Recorder via Bind, and retrieved from a Recorder
+	// via Interface().
+	//
+	// This is conceptually similar to reflect.Value.Interface().
+	Interface() interface{}
+
 	Loader
 	Haecceity
 	Saver
@@ -273,35 +281,12 @@ type Describer interface {
 // List returns a list of objects of the given kind.
 //
 // This runs a Select of the given kind, and returns the results.
-func List(d Describer, limit, offset uint64) ([]Describer, error) {
+func List(d Recorder, limit, offset uint64) ([]Recorder, error) {
 	fn := func(desc Describer, query squirrel.SelectBuilder) (squirrel.SelectBuilder, error) {
 		return query.Limit(limit).Offset(offset), nil
 	}
+
 	return ListWhere(d, fn)
-	/*
-		var tn string = d.TableName()
-		var cols []string = d.Columns(false)
-		q := d.Builder().Select(cols...).From(tn).Limit(limit).Offset(offset)
-		rows, err := q.Query()
-		if err != nil || rows == nil {
-			return []Describer{}, err
-		}
-
-		v := reflect.Indirect(reflect.ValueOf(d))
-		t := v.Type()
-
-		buf := []Describer{}
-		for rows.Next() {
-			nv := reflect.New(t)
-			s := nv.Interface().(Describer)
-			s.Init(d.DB(), d.Driver())
-			dest := s.FieldReferences(false)
-			rows.Scan(dest...)
-			buf = append(buf, s)
-		}
-
-		return buf, rows.Err()
-	*/
 }
 
 // WhereFunc modifies a basic select operation to add conditions.
@@ -310,19 +295,19 @@ func List(d Describer, limit, offset uint64) ([]Describer, error) {
 // a select statement with the 'SELECT ... FROM tablename' portion composed already.
 type WhereFunc func(desc Describer, query squirrel.SelectBuilder) (squirrel.SelectBuilder, error)
 
-// ListWhere takes a describer and a query modifying function and executes a query.
+// ListWhere takes a Recorder and a query modifying function and executes a query.
 //
 // The WhereFunc will be given a SELECT d.Colsumns() FROM d.TableName() statement,
 // and may modify it. Note that while joining is supported, changing the column
 // list will have unpredictable side effects. It is advised that joins be done
 // using Squirrel instead.
 //
-// This will return a list of Describer objects, where the underlying type
-// of each matches the underlying type of the passed-in 'd' Describer.
-func ListWhere(d Describer, fn WhereFunc) ([]Describer, error) {
+// This will return a list of Recorder objects, where the underlying type
+// of each matches the underlying type of the passed-in 'd' Recorder.
+func ListWhere(d Recorder, fn WhereFunc) ([]Recorder, error) {
 	var tn string = d.TableName()
 	var cols []string = d.Columns(false)
-	buf := []Describer{}
+	buf := []Recorder{}
 
 	// Base query
 	q := d.Builder().Select(cols...).From(tn)
@@ -334,6 +319,9 @@ func ListWhere(d Describer, fn WhereFunc) ([]Describer, error) {
 		return buf, err
 	}
 
+	sss, _, _ := q.ToSql()
+	println(sss)
+
 	rows, err := q.Query()
 	if err != nil || rows == nil {
 		return buf, err
@@ -344,7 +332,13 @@ func ListWhere(d Describer, fn WhereFunc) ([]Describer, error) {
 	t := v.Type()
 	for rows.Next() {
 		nv := reflect.New(t)
-		s := nv.Interface().(Describer)
+
+		// Bind an empty base object. Basically, we fetch the object out of
+		// the DbRecorder, and then construct an empty one.
+		rec := reflect.New(reflect.Indirect(reflect.ValueOf(d.(*DbRecorder).record)).Type())
+		nv.Interface().(Recorder).Bind(d.TableName(), rec.Interface())
+
+		s := nv.Interface().(Recorder)
 		s.Init(d.DB(), d.Driver())
 		dest := s.FieldReferences(false)
 		rows.Scan(dest...)
@@ -363,6 +357,10 @@ type DbRecorder struct {
 	key     []*field
 	record  Record
 	flavor  string
+}
+
+func (d *DbRecorder) Interface() interface{} {
+	return d.record
 }
 
 // New creates a new DbRecorder.

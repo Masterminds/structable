@@ -138,7 +138,7 @@ func TestList(t *testing.T) {
 
 	r := New(db, "mysql").Bind("test_table", stool)
 
-	if _, err := List(r.(Describer), 10, 0); err != nil {
+	if _, err := List(r, 10, 0); err != nil {
 		t.Errorf("Error running query: %s", err)
 	}
 
@@ -157,7 +157,7 @@ func TestListWhere_Error(t *testing.T) {
 		return q, errors.New("intentional failure")
 	}
 
-	if _, err := ListWhere(r.(Describer), fn); err == nil {
+	if _, err := ListWhere(r, fn); err == nil {
 		t.Error("Expected failed WhereFunc to fail query")
 	}
 }
