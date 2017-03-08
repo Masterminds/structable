@@ -98,10 +98,42 @@ fn = func(object structable.Describer, sql squirrel.SelectBuilder) (squirrel.Sel
 items, err := structable.ListWhere(object, fn)
 ```
 
+For example, here is a function that uses `ListWhere` to get collection
+of definitions from a table described in a struct named `Table`:
+
+```go
+func (s *SchemaInfo) Tables() ([]*Table, error) {
+
+  // Bind a new recorder. We use an empty object just to get the field
+  // data for that struct.
+	t := &Table{}
+	st := structable.New(s.Queryer, s.Driver).Bind(t.TableName(), t)
+
+  // We want to return no more than 10 of these.
+	fn := func(d structable.Describer, q squirrel.SelectBuilder) (squirrel.SelectBuilder, error) {
+		return q.Limit(10), nil
+	}
+
+  // Fetch a list of Table structs.
+	items, err := structable.ListWhere(st, fn)
+	if err != nil {
+		return []*Table{}, err
+	}
+
+  // Because we get back a []Recorder, we need to get the original data
+  // back out. We have to manually convert it back to its real type.
+	tables := make([]*Table, len(items))
+	for i, item := range items {
+		tables[i] = item.Interface().(*Table)
+	}
+	return tables, nil
+}
+```
+
 ### Tested On
 
 - MySQL (5.5)
-- PostgreSQL (9.3)
+- PostgreSQL (9.3, 9.4, 9.6)
 - SQLite 3
 
 ## What It Does Not Do
