@@ -11,11 +11,13 @@ import (
 	"github.com/Masterminds/squirrel"
 	"github.com/codegangsta/cli"
 
+	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
 )
 
 const version = "DEV"
 
+// Usage : exported const Usage
 const Usage = `Read a schema and generate Structable structs.
 
 This utility generates Structable structs be reading your database table and
@@ -31,6 +33,7 @@ import (
 
 	"github.com/Masterminds/squirrel"
 	"github.com/Masterminds/structable"
+	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
 )
 
@@ -252,7 +255,7 @@ func importTables(c *cli.Context) {
 	}
 
 	for _, t := range tables {
-		f, err := importTable(t, bldr)
+		f, err := importTable(t, bldr, driver(c))
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to import table %s: %s", t, err)
 		}
@@ -288,7 +291,7 @@ func publicTables(b squirrel.StatementBuilderType) ([]string, error) {
 // importTable reads a table definition and writes a corresponding struct.
 // SELECT table_name, column_name, data_type, character_maximum_length
 //   FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = 'goose_db_version'
-func importTable(tbl string, b squirrel.StatementBuilderType) (*structDesc, error) {
+func importTable(tbl string, b squirrel.StatementBuilderType, driver string) (*structDesc, error) {
 
 	pks, err := primaryKeyField(tbl, b)
 	if err != nil {
@@ -313,7 +316,12 @@ func importTable(tbl string, b squirrel.StatementBuilderType) (*structDesc, erro
 			return nil, err
 		}
 		c.Max = length.Int64
-		ff = append(ff, structField(c, pks, tbl, b))
+		switch driver {
+		case "mysql":
+			ff = append(ff, structFieldMySQL(c, pks, tbl, b))
+		case "postgres":
+			ff = append(ff, structField(c, pks, tbl, b))
+		}
 	}
 	sd := &structDesc{
 		StructName: goName(tbl),
@@ -345,8 +353,18 @@ func primaryKeyField(tbl string, b squirrel.StatementBuilderType) ([]string, err
 	return res, nil
 }
 
-func sequentialKey(tbl, pk string, b squirrel.StatementBuilderType) bool {
+func autoincrementKey(tbl, pk string, b squirrel.StatementBuilderType) bool {
+	q := b.Select("COUNT(*)").
+		From("INFORMATION_SCHEMA.COLUMNS").
+		Where("TABLE_NAME = ? AND COLUMN_NAME = ? AND EXTRA = 'auto_increment'", tbl, pk)
+	var num int
+	if err := q.Scan(&num); err != nil {
+		panic(err)
+	}
+	return num > 0
+}
 
+func sequentialKey(tbl, pk string, b squirrel.StatementBuilderType) bool {
 	tlen := 58
 
 	stbl := tbl
@@ -370,6 +388,24 @@ func sequentialKey(tbl, pk string, b squirrel.StatementBuilderType) bool {
 		panic(err)
 	}
 	return num > 0
+}
+
+func structFieldMySQL(c *column, pks []string, tbl string, b squirrel.StatementBuilderType) string {
+	tpl := "%s %s `stbl:\"%s\"`"
+	gn := destutter(goName(c.Name), goName(tbl))
+	tt := goType(c.DataType)
+
+	tag := c.Name
+	for _, p := range pks {
+		if c.Name == p {
+			tag += ",PRIMARY_KEY"
+			if autoincrementKey(tbl, c.Name, b) {
+				tag += ",AUTO_INCREMENT"
+			}
+		}
+	}
+
+	return fmt.Sprintf(tpl, gn, tt, tag)
 }
 
 func structField(c *column, pks []string, tbl string, b squirrel.StatementBuilderType) string {
