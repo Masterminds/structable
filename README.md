@@ -19,6 +19,7 @@ filling the following contract:
 ```go
   type Recorder interface {
     Bind(string, Record) Recorder // link struct to table
+    Interface() interface{}  // Get the struct that has been linked
     Insert() error // INSERT just one record
     Update() error // UPDATE just one record
     Delete() error // DELETE just one record
@@ -37,6 +38,8 @@ operations.
 The usual way...
 
 ```
+$ glide get github.com/Masterminds/structable
+$ # or...
 $ go get github.com/Masterminds/structable
 ```
 
@@ -68,7 +71,7 @@ To manage instances of this struct, you do something like this:
 ```go
   stool := new(Stool)
   stool.Material = "Wood"
-  db := getDb() // You're on  the hook to do this part.
+  db := getDb() // Get a sql.Db. You're on  the hook to do this part.
 
   // Create a new structable.Recorder and tell it to
   // bind the given struct as a row in the given table.
@@ -89,13 +92,14 @@ for listing objects:
 
 ```go
 // Get a list of things that have the same type as object.
-items, err := structable.List(object, offset, limit)
+stool := new(Stool)
+items, err := structable.List(stool, offset, limit)
 
 // Customize a list of things that have the same type as object.
 fn = func(object structable.Describer, sql squirrel.SelectBuilder) (squirrel.SelectBuilder, error) {
   return sql.Limit(10), nil
 }
-items, err := structable.ListWhere(object, fn)
+items, err := structable.ListWhere(stool, fn)
 ```
 
 For example, here is a function that uses `ListWhere` to get collection
