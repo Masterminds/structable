@@ -319,9 +319,6 @@ func ListWhere(d Recorder, fn WhereFunc) ([]Recorder, error) {
 		return buf, err
 	}
 
-	sss, _, _ := q.ToSql()
-	println(sss)
-
 	rows, err := q.Query()
 	if err != nil || rows == nil {
 		return buf, err
@@ -340,7 +337,7 @@ func ListWhere(d Recorder, fn WhereFunc) ([]Recorder, error) {
 
 		s := nv.Interface().(Recorder)
 		s.Init(d.DB(), d.Driver())
-		dest := s.FieldReferences(false)
+		dest := s.FieldReferences(true)
 		rows.Scan(dest...)
 		buf = append(buf, s)
 	}
@@ -624,6 +621,9 @@ func (s *DbRecorder) colList(withKeys bool, omitNil bool) []string {
 }
 
 // FieldReferences returns a list of references to fields on this object.
+//
+// If withKeys is true, fields that compose the primary key will also be
+// included. Otherwise, only non-primary key fields will be included.
 //
 // This is used for processing SQL results:
 //
