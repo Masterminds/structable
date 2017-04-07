@@ -1,7 +1,9 @@
 # Structable: Struct-Table Mapping for Go
+[![Stability:
+Sustained](https://masterminds.github.io/stability/sustained.svg)](https://masterminds.github.io/stability/sustained.html)
 
 **Warning:** This is the Structable 4 development branch. For a stable
-release, use version 3.1.0.
+release, use version 3.1.0. Structable development happens very slowly.
 
 This library provides basic struct-to-table mapping for Go.
 
