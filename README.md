@@ -20,15 +20,15 @@ filling the following contract:
 
 ```go
   type Recorder interface {
-    Bind(string, Record) Recorder // link struct to table
-    Interface() interface{}  // Get the struct that has been linked
-    Insert() error // INSERT just one record
-    Update() error // UPDATE just one record
-    Delete() error // DELETE just one record
-    Exists() (bool, error) // Check for just one record
-    ExistsWhere(cond interface{}, args ...interface{}) (bool, error)
-    Load() error  // SELECT just one record
-    LoadWhere(cond interface{}, args ...interface{}) error // Alternate Load()
+	Bind(string, Record) Recorder // link struct to table
+	Interface() interface{}       // Get the struct that has been linked
+	Insert() error                // INSERT just one record
+	Update() error                // UPDATE just one record
+	Delete() error                // DELETE just one record
+	Exists() (bool, error)        // Check for just one record
+	ExistsWhere(cond interface{}, args ...interface{}) (bool, error)
+	Load() error                                           // SELECT just one record
+	LoadWhere(cond interface{}, args ...interface{}) error // Alternate Load()
   }
 ```
 
@@ -61,10 +61,10 @@ To annotate a struct, you do something like this:
 
 ```go
   type Stool struct {
-    Id		 int	`stbl:"id, PRIMARY_KEY, AUTO_INCREMENT"`
-    Legs	 int    `stbl:"number_of_legs"`
-    Material string `stbl:"material"`
-    Ignored  string // will not be stored. No tag.
+	Id       int    `stbl:"id, PRIMARY_KEY, AUTO_INCREMENT"`
+	Legs     int    `stbl:"number_of_legs"`
+	Material string `stbl:"material"`
+	Ignored  string // will not be stored. No tag.
   }
 ```
 
