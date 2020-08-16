@@ -306,7 +306,7 @@ type WhereFunc func(desc Describer, query squirrel.SelectBuilder) (squirrel.Sele
 // of each matches the underlying type of the passed-in 'd' Recorder.
 func ListWhere(d Recorder, fn WhereFunc) ([]Recorder, error) {
 	var tn string = d.TableName()
-	var cols []string = d.Columns(false)
+	var cols []string = d.Columns(true)
 	buf := []Recorder{}
 
 	// Base query
@@ -338,7 +338,11 @@ func ListWhere(d Recorder, fn WhereFunc) ([]Recorder, error) {
 		s := nv.Interface().(Recorder)
 		s.Init(d.DB(), d.Driver())
 		dest := s.FieldReferences(true)
-		rows.Scan(dest...)
+
+		if err := rows.Scan(dest...); err != nil {
+			return buf, err
+		}
+
 		buf = append(buf, s)
 	}
 
